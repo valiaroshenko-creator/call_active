@@ -1,0 +1,677 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Звонки менеджеров по дням</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: page header → sticky filter bar with pill chips → summary card → grid of per-manager chart cards → daily table → method notes. Light only: tokens of the Centrika client cabinet. */
+:root {
+  --bg: #F4F6F9;
+  --surface: #FFFFFF;
+  --line: #E3E6EC;
+  --ink: #111827;
+  --ink-2: #374151;
+  --muted: #6B7280;
+  --head: #F9FAFB;
+  --band: #F3F4F6;
+  --grid: #EEF0F3;
+  --axis: #D1D5DB;
+  --blue: #2F5CE0;
+  --blue-soft: #EEF2FF;
+  --blue-line: #C7D2FE;
+  --c-out: #2F5CE0;
+  --c-in: #0E9F8E;
+  --c-all: #9CA3AF;
+  --font: "Inter", "Helvetica Neue", Arial, sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1240px; margin: 0 auto; padding-inline: 24px; padding-block: 28px 64px; display: grid; gap: 20px; }
+h1 { font-size: 27px; line-height: 1.2; font-weight: 700; letter-spacing: -.01em; margin: 0; text-wrap: balance; }
+h2 { font-size: 17px; font-weight: 600; margin: 0; }
+.lede { color: var(--ink-2); font-size: 16px; margin: 6px 0 0; max-width: 82ch; }
+.note { color: var(--muted); font-size: 13px; margin: 4px 0 0; }
+
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; box-shadow: 0 6px 16px rgba(17, 24, 39, .04); }
+.ctl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ctl-name { color: var(--muted); font-size: 13px; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label { padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; color: var(--ink-2); font-weight: 500; font-size: 14px; line-height: 1.2; white-space: nowrap; }
+.seg label:hover { background: var(--band); }
+.seg input:checked + label { background: var(--blue-soft); border-color: var(--blue-line); color: var(--blue); }
+.seg input:focus-visible + label { outline: 2px solid var(--blue); outline-offset: 2px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-left: auto; color: var(--ink-2); font-size: 14px; }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.lk { width: 16px; height: 2px; border-radius: 1px; display: inline-block; }
+.lk.out { background: var(--c-out); height: 3px; }
+.lk.all { background: var(--c-all); }
+.lk.in { background: var(--c-in); }
+.sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.sw.band { background: var(--band); outline: 1px solid var(--axis); }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; min-width: 0; overflow: hidden; }
+.panel-head { padding: 16px 20px; border-bottom: 1px solid var(--line); }
+.panel.pad { padding: 16px 20px; }
+.head-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 10px 20px; }
+.head-row > div:first-child { min-width: 0; }
+td.na { color: var(--axis); }
+.tbl-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 11px 16px; text-align: right; border-top: 1px solid var(--line); white-space: nowrap; font-size: 14px; }
+th { background: var(--head); font-weight: 500; color: var(--muted); border-top: 0; vertical-align: bottom; }
+th:first-child, td:first-child { text-align: left; }
+th .lk { margin-right: 7px; vertical-align: middle; }
+tr.avg td { color: var(--ink-2); background: var(--head); font-weight: 500; }
+td.total { font-weight: 600; }
+td.src-col { color: var(--muted); }
+td.mgr-cell { font-weight: 500; }
+td.barcell { width: 28%; min-width: 150px; }
+.hbar { display: flex; gap: 2px; height: 10px; }
+.hbar i { display: block; height: 100%; }
+.hbar i:last-child { border-radius: 0 4px 4px 0; }
+.hbar .out { background: var(--c-out); }
+.hbar .in { background: var(--c-in); }
+.mgr-link { color: var(--ink); font-weight: 500; text-decoration: none; }
+.mgr-link:hover { color: var(--blue); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 560px), 1fr)); gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; min-width: 0; overflow: hidden; scroll-margin-top: 90px; }
+.card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+.card-head > div { min-width: 0; }
+.card h3 { font-size: 17px; font-weight: 600; margin: 0; }
+.src { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.kpi { text-align: right; flex: none; }
+.kpi b { display: block; font-size: 26px; font-weight: 700; line-height: 1.1; letter-spacing: -.01em; }
+.kpi span { color: var(--muted); font-size: 12.5px; }
+.split { color: var(--ink-2); font-size: 13.5px; padding: 12px 20px 0; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.split span { display: inline-flex; align-items: center; gap: 7px; }
+.chart { position: relative; margin: 4px 14px 10px; }
+.chart svg { display: block; width: 100%; overflow: visible; touch-action: pan-y; }
+.chart text { font-family: var(--font); font-variant-numeric: tabular-nums; }
+.hours { padding: 2px 16px 14px; border-top: 1px solid var(--line); container: hours / inline-size; }
+.hours-title { font-size: 13px; color: var(--muted); margin: 10px 0 8px; }
+.hours-title b { color: var(--ink); font-weight: 600; }
+.htbl { table-layout: fixed; width: 100%; }
+.htbl col.lbl { width: 92px; }
+.htbl th, .htbl td { padding: 6px 2px; font-size: 12.5px; text-align: center; overflow: hidden; text-overflow: clip; }
+.htbl th { padding-block: 7px; }
+.htbl th:first-child, .htbl td:first-child { text-align: left; padding-left: 8px; }
+.htbl .hs { display: none; }
+@container hours (max-width: 460px) {
+  .htbl col.lbl { width: 46px; }
+  .htbl .hf { display: none; }
+  .htbl .hs { display: inline; }
+  .htbl th, .htbl td { font-size: 11.5px; padding-inline: 1px; }
+  .htbl th:first-child, .htbl td:first-child { padding-left: 4px; }
+}
+.htbl td { color: var(--ink-2); }
+.htbl td.z { color: var(--axis); }
+.htbl tr.main td { color: var(--ink); font-weight: 600; }
+
+details > summary { cursor: pointer; font-weight: 600; font-size: 17px; }
+details > summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 4px; }
+details[open] > summary { margin-bottom: 14px; }
+.daily { border: 1px solid var(--line); border-radius: 12px; border-collapse: separate; border-spacing: 0; }
+.daily th, .daily td { padding: 7px 9px; font-size: 13px; }
+.daily td.lbl { color: var(--muted); }
+.daily tr.sum td { font-weight: 600; }
+.daily tr.last + tr td { border-top-color: var(--axis); }
+.daily .off { background: var(--band); }
+
+.rules { margin: 12px 0 0; padding-left: 20px; color: var(--ink-2); display: grid; gap: 6px; max-width: 100ch; }
+
+.tip { position: fixed; z-index: 20; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(17, 24, 39, .10); border-radius: 12px; padding: 10px 14px; font-size: 13px; min-width: 200px; max-width: 290px; }
+.tip-title { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+.tip-row { display: grid; grid-template-columns: 16px auto 1fr; align-items: baseline; column-gap: 7px; }
+.tip-row + .tip-row { margin-top: 3px; }
+.tip-row b { font-variant-numeric: tabular-nums; font-weight: 600; }
+.tip-row span { color: var(--ink-2); }
+.tip-row small { grid-column: 3; color: var(--muted); font-size: 11.5px; }
+.tip-row .lk { align-self: center; }
+.tip-row.main b { font-size: 15px; }
+.tip-row.main span { color: var(--ink); font-weight: 500; }
+.tip-flag { margin-top: 6px; color: var(--ink-2); font-size: 12px; }
+
+@media (max-width: 700px) {
+  .wrap { padding-inline: 16px; }
+  h1 { font-size: 23px; }
+  .legend { margin-left: 0; }
+  .controls { position: static; }
+  .kpi b { font-size: 22px; }
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>Звонки менеджеров по дням</h1>
+    <p class="lede" id="lede"></p>
+    <p class="note" id="partial-note"></p>
+  </header>
+
+  <div class="controls" role="group" aria-label="Настройки графиков">
+    <div class="ctl">
+      <span class="ctl-name">Показатель</span>
+      <div class="seg" id="metric"></div>
+    </div>
+    <div class="ctl">
+      <span class="ctl-name">Шкала</span>
+      <div class="seg" id="scale">
+        <input type="radio" name="scale" id="scale-shared" value="shared" checked><label for="scale-shared">Общая</label>
+        <input type="radio" name="scale" id="scale-own" value="own"><label for="scale-own">Своя у каждого</label>
+      </div>
+    </div>
+    <div class="legend" aria-label="Обозначения">
+      <span><i class="lk out"></i>Исходящие</span>
+      <span><i class="lk in"></i>Входящие</span>
+      <span><i class="lk all"></i>Вместе</span>
+      <span><i class="sw band"></i>Исключённый день</span>
+    </div>
+  </div>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2 id="sum-title"></h2>
+      <p class="note">Офис и МТС сложены. Среднее за рабочий день, когда был хотя бы один звонок; исключённые дни не входят.</p>
+    </div>
+    <div class="tbl-wrap"><table id="summary"></table></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head head-row">
+      <div>
+        <h2 id="mon-title"></h2>
+        <p class="note" id="mon-note"></p>
+      </div>
+      <div class="seg" id="mon-line">
+        <input type="radio" name="mon-line" id="mon-out" value="out" checked><label for="mon-out">Исходящие</label>
+        <input type="radio" name="mon-line" id="mon-in" value="in"><label for="mon-in">Входящие</label>
+        <input type="radio" name="mon-line" id="mon-all" value="all"><label for="mon-all">Вместе</label>
+      </div>
+    </div>
+    <div class="tbl-wrap"><table id="monthly"></table></div>
+  </section>
+
+  <section class="grid" id="cards"></section>
+
+  <section class="panel pad">
+    <details id="daily-details">
+      <summary id="daily-title">Таблица по дням</summary>
+      <div class="tbl-wrap"><table class="daily" id="daily"></table></div>
+    </details>
+  </section>
+
+  <section class="panel pad">
+    <h2>Как считали</h2>
+    <ul class="rules" id="rules"></ul>
+  </section>
+</div>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+const DATA = {"dates": ["2026-08-31", "2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04", "2026-09-07", "2026-09-08", "2026-09-09", "2026-09-10", "2026-09-11", "2026-09-14", "2026-09-15", "2026-09-16", "2026-09-17", "2026-09-18", "2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25", "2026-09-28", "2026-09-29", "2026-09-30", "2026-10-01", "2026-10-02", "2026-10-05", "2026-10-06"], "partial": {}, "no_mts": ["2026-10-06"], "months": ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь"], "managers": [{"name": "Топоркова", "office": true, "mts": true, "phone": "+7 918 623-85-21", "days": [{"o_out_calls": 55.0, "o_out_gt10": 25.0, "o_out_talk": 29.13, "o_in_calls": 12.0, "o_in_gt10": 6.0, "o_in_talk": 8.12, "m_out_calls": 2.0, "m_out_gt10": 0.0, "m_out_talk": 0.1, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 6, "vac": false}, {"o_out_calls": 32.0, "o_out_gt10": 13.0, "o_out_talk": 42.35, "o_in_calls": 8.0, "o_in_gt10": 5.0, "o_in_talk": 12.0, "m_out_calls": 1.0, "m_out_gt10": 0.0, "m_out_talk": 0.1, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 4.15, "o_missed": 2, "vac": false}, {"o_out_calls": 48.0, "o_out_gt10": 22.0, "o_out_talk": 36.75, "o_in_calls": 9.0, "o_in_gt10": 5.0, "o_in_talk": 3.82, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 2.3, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 38.0, "o_out_gt10": 26.0, "o_out_talk": 45.4, "o_in_calls": 8.0, "o_in_gt10": 5.0, "o_in_talk": 9.48, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 39.0, "o_out_gt10": 25.0, "o_out_talk": 43.48, "o_in_calls": 11.0, "o_in_gt10": 9.0, "o_in_talk": 18.18, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 2, "vac": false}, {"o_out_calls": 52.0, "o_out_gt10": 25.0, "o_out_talk": 34.53, "o_in_calls": 16.0, "o_in_gt10": 11.0, "o_in_talk": 24.02, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 5, "vac": false}, {"o_out_calls": 47.0, "o_out_gt10": 23.0, "o_out_talk": 47.37, "o_in_calls": 18.0, "o_in_gt10": 5.0, "o_in_talk": 4.42, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 9, "vac": false}, {"o_out_calls": 59.0, "o_out_gt10": 31.0, "o_out_talk": 58.4, "o_in_calls": 13.0, "o_in_gt10": 4.0, "o_in_talk": 8.6, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 9, "vac": false}, {"o_out_calls": 49.0, "o_out_gt10": 21.0, "o_out_talk": 47.2, "o_in_calls": 18.0, "o_in_gt10": 9.0, "o_in_talk": 17.52, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 9, "vac": false}, {"o_out_calls": 21.0, "o_out_gt10": 17.0, "o_out_talk": 38.12, "o_in_calls": 8.0, "o_in_gt10": 5.0, "o_in_talk": 8.53, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 48.0, "o_out_gt10": 31.0, "o_out_talk": 39.37, "o_in_calls": 20.0, "o_in_gt10": 10.0, "o_in_talk": 42.47, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 8, "vac": false}, {"o_out_calls": 51.0, "o_out_gt10": 28.0, "o_out_talk": 33.45, "o_in_calls": 23.0, "o_in_gt10": 12.0, "o_in_talk": 24.88, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 11, "vac": false}, {"o_out_calls": 47.0, "o_out_gt10": 27.0, "o_out_talk": 33.5, "o_in_calls": 14.0, "o_in_gt10": 6.0, "o_in_talk": 9.07, "m_out_calls": 1.0, "m_out_gt10": 0.0, "m_out_talk": 0.07, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 7, "vac": false}, {"o_out_calls": 32.0, "o_out_gt10": 24.0, "o_out_talk": 44.27, "o_in_calls": 18.0, "o_in_gt10": 8.0, "o_in_talk": 13.25, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 9, "vac": false}, {"o_out_calls": 27.0, "o_out_gt10": 19.0, "o_out_talk": 19.87, "o_in_calls": 5.0, "o_in_gt10": 2.0, "o_in_talk": 2.75, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 2, "vac": false}, {"o_out_calls": 62.0, "o_out_gt10": 31.0, "o_out_talk": 58.62, "o_in_calls": 13.0, "o_in_gt10": 3.0, "o_in_talk": 13.58, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 8, "vac": false}, {"o_out_calls": 50.0, "o_out_gt10": 27.0, "o_out_talk": 68.93, "o_in_calls": 7.0, "o_in_gt10": 2.0, "o_in_talk": 4.77, "m_out_calls": 1.0, "m_out_gt10": 0.0, "m_out_talk": 0.08, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 5, "vac": false}, {"o_out_calls": 43.0, "o_out_gt10": 19.0, "o_out_talk": 26.55, "o_in_calls": 19.0, "o_in_gt10": 7.0, "o_in_talk": 22.6, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 1.22, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 10, "vac": false}, {"o_out_calls": 42.0, "o_out_gt10": 25.0, "o_out_talk": 42.03, "o_in_calls": 18.0, "o_in_gt10": 10.0, "o_in_talk": 25.37, "m_out_calls": 1.0, "m_out_gt10": 0.0, "m_out_talk": 0.03, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 7, "vac": false}, {"o_out_calls": 32.0, "o_out_gt10": 22.0, "o_out_talk": 35.32, "o_in_calls": 9.0, "o_in_gt10": 4.0, "o_in_talk": 3.55, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 5, "vac": false}, {"o_out_calls": 48.0, "o_out_gt10": 27.0, "o_out_talk": 27.92, "o_in_calls": 27.0, "o_in_gt10": 9.0, "o_in_talk": 15.33, "m_out_calls": 3.0, "m_out_gt10": 0.0, "m_out_talk": 0.15, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 16, "vac": false}, {"o_out_calls": 42.0, "o_out_gt10": 17.0, "o_out_talk": 27.53, "o_in_calls": 17.0, "o_in_gt10": 10.0, "o_in_talk": 23.7, "m_out_calls": 1.0, "m_out_gt10": 0.0, "m_out_talk": 0.05, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 7, "vac": false}, {"o_out_calls": 42.0, "o_out_gt10": 22.0, "o_out_talk": 43.88, "o_in_calls": 11.0, "o_in_gt10": 5.0, "o_in_talk": 4.63, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 6, "vac": false}, {"o_out_calls": 23.0, "o_out_gt10": 13.0, "o_out_talk": 35.17, "o_in_calls": 5.0, "o_in_gt10": 3.0, "o_in_talk": 5.92, "m_out_calls": 5.0, "m_out_gt10": 4.0, "m_out_talk": 16.12, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 2, "vac": false}, {"o_out_calls": 36.0, "o_out_gt10": 19.0, "o_out_talk": 22.88, "o_in_calls": 15.0, "o_in_gt10": 3.0, "o_in_talk": 5.73, "m_out_calls": 5.0, "m_out_gt10": 0.0, "m_out_talk": 0.23, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 10, "vac": false}, {"o_out_calls": 43.0, "o_out_gt10": 19.0, "o_out_talk": 22.97, "o_in_calls": 11.0, "o_in_gt10": 5.0, "o_in_talk": 6.6, "m_out_calls": 2.0, "m_out_gt10": 0.0, "m_out_talk": 0.1, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 6, "vac": false}, {"o_out_calls": 45.0, "o_out_gt10": 20.0, "o_out_talk": 38.57, "o_in_calls": 11.0, "o_in_gt10": 7.0, "o_in_talk": 10.83, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}], "monthly": [{"n": 15, "o_out_calls": 651.0, "o_out_gt10": 384.0, "o_out_talk": 701.97, "o_in_calls": 303.0, "o_in_gt10": 109.0, "o_in_talk": 211.88, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 19, "o_out_calls": 766.0, "o_out_gt10": 434.0, "o_out_talk": 740.28, "o_in_calls": 285.0, "o_in_gt10": 117.0, "o_in_talk": 283.97, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 21, "o_out_calls": 741.0, "o_out_gt10": 448.0, "o_out_talk": 680.28, "o_in_calls": 341.0, "o_in_gt10": 118.0, "o_in_talk": 224.92, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 21, "o_out_calls": 842.0, "o_out_gt10": 481.0, "o_out_talk": 841.3, "o_in_calls": 302.0, "o_in_gt10": 141.0, "o_in_talk": 301.53, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 19, "o_out_calls": 800.0, "o_out_gt10": 454.0, "o_out_talk": 735.07, "o_in_calls": 289.0, "o_in_gt10": 121.0, "o_in_talk": 240.6, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 19, "o_out_calls": 866.0, "o_out_gt10": 489.0, "o_out_talk": 768.95, "o_in_calls": 287.0, "o_in_gt10": 130.0, "o_in_talk": 189.43, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 20, "o_out_calls": 813.0, "o_out_gt10": 442.0, "o_out_talk": 729.35, "o_in_calls": 218.0, "o_in_gt10": 114.0, "o_in_talk": 208.33, "m_out_calls": 38.0, "m_out_gt10": 24.0, "m_out_talk": 27.97, "m_in_calls": 5.0, "m_in_gt10": 5.0, "m_in_talk": 4.08}, {"n": 21, "o_out_calls": 867.0, "o_out_gt10": 421.0, "o_out_talk": 515.73, "o_in_calls": 219.0, "o_in_gt10": 96.0, "o_in_talk": 149.0, "m_out_calls": 93.0, "m_out_gt10": 43.0, "m_out_talk": 44.8, "m_in_calls": 9.0, "m_in_gt10": 9.0, "m_in_talk": 6.15}, {"n": 22, "o_out_calls": 951.0, "o_out_gt10": 522.0, "o_out_talk": 894.83, "o_in_calls": 310.0, "o_in_gt10": 146.0, "o_in_talk": 312.52, "m_out_calls": 10.0, "m_out_gt10": 2.0, "m_out_talk": 4.0, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 4.15}, {"n": 4, "o_out_calls": 147.0, "o_out_gt10": 71.0, "o_out_talk": 119.58, "o_in_calls": 42.0, "o_in_gt10": 18.0, "o_in_talk": 29.08, "m_out_calls": 12.0, "m_out_gt10": 4.0, "m_out_talk": 16.45, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}], "hourly": {"n": 47, "rows": [{"o_out_calls": 7.0, "o_out_gt10": 2.0, "o_out_talk": 1.03, "o_in_calls": 9.0, "o_in_gt10": 0.0, "o_in_talk": 0.0, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 250.0, "o_out_gt10": 140.0, "o_out_talk": 193.72, "o_in_calls": 75.0, "o_in_gt10": 45.0, "o_in_talk": 63.32, "m_out_calls": 18.0, "m_out_gt10": 10.0, "m_out_talk": 20.67, "m_in_calls": 3.0, "m_in_gt10": 3.0, "m_in_talk": 5.18}, {"o_out_calls": 332.0, "o_out_gt10": 196.0, "o_out_talk": 221.98, "o_in_calls": 100.0, "o_in_gt10": 56.0, "o_in_talk": 97.73, "m_out_calls": 25.0, "m_out_gt10": 13.0, "m_out_talk": 9.87, "m_in_calls": 2.0, "m_in_gt10": 2.0, "m_in_talk": 0.98}, {"o_out_calls": 350.0, "o_out_gt10": 177.0, "o_out_talk": 259.15, "o_in_calls": 98.0, "o_in_gt10": 39.0, "o_in_talk": 54.57, "m_out_calls": 19.0, "m_out_gt10": 7.0, "m_out_talk": 5.25, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 9.0, "o_out_gt10": 6.0, "o_out_talk": 8.75, "o_in_calls": 35.0, "o_in_gt10": 4.0, "o_in_talk": 3.58, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 195.0, "o_out_gt10": 97.0, "o_out_talk": 150.93, "o_in_calls": 60.0, "o_in_gt10": 31.0, "o_in_talk": 72.22, "m_out_calls": 6.0, "m_out_gt10": 4.0, "m_out_talk": 6.47, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 262.0, "o_out_gt10": 152.0, "o_out_talk": 274.35, "o_in_calls": 78.0, "o_in_gt10": 37.0, "o_in_talk": 85.0, "m_out_calls": 12.0, "m_out_gt10": 4.0, "m_out_talk": 6.87, "m_in_calls": 3.0, "m_in_gt10": 3.0, "m_in_talk": 3.27}, {"o_out_calls": 275.0, "o_out_gt10": 124.0, "o_out_talk": 213.95, "o_in_calls": 62.0, "o_in_gt10": 26.0, "o_in_talk": 77.0, "m_out_calls": 20.0, "m_out_gt10": 5.0, "m_out_talk": 7.97, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 0.33}, {"o_out_calls": 202.0, "o_out_gt10": 92.0, "o_out_talk": 172.12, "o_in_calls": 42.0, "o_in_gt10": 20.0, "o_in_talk": 35.77, "m_out_calls": 11.0, "m_out_gt10": 3.0, "m_out_talk": 3.6, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 0.53}, {"o_out_calls": 83.0, "o_out_gt10": 28.0, "o_out_talk": 34.17, "o_in_calls": 5.0, "o_in_gt10": 2.0, "o_in_talk": 1.42, "m_out_calls": 4.0, "m_out_gt10": 3.0, "m_out_talk": 4.57, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}]}}, {"name": "Фоминская", "office": true, "mts": false, "phone": null, "days": [{"o_out_calls": 60.0, "o_out_gt10": 21.0, "o_out_talk": 17.23, "o_in_calls": 6.0, "o_in_gt10": 3.0, "o_in_talk": 7.88, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 43.0, "o_out_gt10": 22.0, "o_out_talk": 17.08, "o_in_calls": 7.0, "o_in_gt10": 4.0, "o_in_talk": 20.42, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 43.0, "o_out_gt10": 19.0, "o_out_talk": 17.4, "o_in_calls": 4.0, "o_in_gt10": 4.0, "o_in_talk": 5.75, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 40.0, "o_out_gt10": 12.0, "o_out_talk": 13.0, "o_in_calls": 7.0, "o_in_gt10": 5.0, "o_in_talk": 13.43, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": false}, {"o_out_calls": 30.0, "o_out_gt10": 13.0, "o_out_talk": 17.63, "o_in_calls": 11.0, "o_in_gt10": 11.0, "o_in_talk": 44.72, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 63.0, "o_out_gt10": 26.0, "o_out_talk": 23.58, "o_in_calls": 7.0, "o_in_gt10": 5.0, "o_in_talk": 3.3, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 2, "vac": false}, {"o_out_calls": 61.0, "o_out_gt10": 20.0, "o_out_talk": 19.32, "o_in_calls": 4.0, "o_in_gt10": 3.0, "o_in_talk": 9.42, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": false}, {"o_out_calls": 58.0, "o_out_gt10": 19.0, "o_out_talk": 14.17, "o_in_calls": 6.0, "o_in_gt10": 6.0, "o_in_talk": 9.42, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 57.0, "o_out_gt10": 28.0, "o_out_talk": 30.05, "o_in_calls": 6.0, "o_in_gt10": 4.0, "o_in_talk": 9.02, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 2, "vac": false}, {"o_out_calls": 33.0, "o_out_gt10": 14.0, "o_out_talk": 14.53, "o_in_calls": 8.0, "o_in_gt10": 8.0, "o_in_talk": 21.42, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 50.0, "o_out_gt10": 22.0, "o_out_talk": 35.52, "o_in_calls": 7.0, "o_in_gt10": 3.0, "o_in_talk": 3.97, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 44.0, "o_out_gt10": 21.0, "o_out_talk": 18.55, "o_in_calls": 9.0, "o_in_gt10": 6.0, "o_in_talk": 10.78, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 60.0, "o_out_gt10": 27.0, "o_out_talk": 23.87, "o_in_calls": 11.0, "o_in_gt10": 6.0, "o_in_talk": 8.68, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 5, "vac": false}, {"o_out_calls": 64.0, "o_out_gt10": 29.0, "o_out_talk": 21.5, "o_in_calls": 2.0, "o_in_gt10": 2.0, "o_in_talk": 2.35, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 62.0, "o_out_gt10": 22.0, "o_out_talk": 28.92, "o_in_calls": 9.0, "o_in_gt10": 4.0, "o_in_talk": 5.7, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 4, "vac": false}, {"o_out_calls": 59.0, "o_out_gt10": 22.0, "o_out_talk": 17.57, "o_in_calls": 4.0, "o_in_gt10": 3.0, "o_in_talk": 1.73, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": false}, {"o_out_calls": 48.0, "o_out_gt10": 19.0, "o_out_talk": 23.5, "o_in_calls": 8.0, "o_in_gt10": 5.0, "o_in_talk": 14.95, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 56.0, "o_out_gt10": 28.0, "o_out_talk": 33.8, "o_in_calls": 12.0, "o_in_gt10": 6.0, "o_in_talk": 17.22, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 5, "vac": false}, {"o_out_calls": 55.0, "o_out_gt10": 20.0, "o_out_talk": 18.33, "o_in_calls": 10.0, "o_in_gt10": 6.0, "o_in_talk": 7.63, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 4, "vac": false}, {"o_out_calls": 37.0, "o_out_gt10": 12.0, "o_out_talk": 9.32, "o_in_calls": 6.0, "o_in_gt10": 0.0, "o_in_talk": 0.08, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 5, "vac": false}, {"o_out_calls": 52.0, "o_out_gt10": 25.0, "o_out_talk": 33.02, "o_in_calls": 17.0, "o_in_gt10": 10.0, "o_in_talk": 14.67, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 7, "vac": false}, {"o_out_calls": 54.0, "o_out_gt10": 17.0, "o_out_talk": 17.5, "o_in_calls": 5.0, "o_in_gt10": 5.0, "o_in_talk": 9.8, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 47.0, "o_out_gt10": 15.0, "o_out_talk": 15.2, "o_in_calls": 9.0, "o_in_gt10": 7.0, "o_in_talk": 14.95, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 2, "vac": false}, {"o_out_calls": 57.0, "o_out_gt10": 18.0, "o_out_talk": 22.72, "o_in_calls": 12.0, "o_in_gt10": 6.0, "o_in_talk": 8.03, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 4, "vac": false}, {"o_out_calls": 51.0, "o_out_gt10": 20.0, "o_out_talk": 13.13, "o_in_calls": 8.0, "o_in_gt10": 7.0, "o_in_talk": 9.18, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": false}, {"o_out_calls": 88.0, "o_out_gt10": 27.0, "o_out_talk": 22.77, "o_in_calls": 10.0, "o_in_gt10": 4.0, "o_in_talk": 4.68, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 6, "vac": false}, {"o_out_calls": 63.0, "o_out_gt10": 30.0, "o_out_talk": 31.72, "o_in_calls": 4.0, "o_in_gt10": 3.0, "o_in_talk": 3.08, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": false}], "monthly": [{"n": 15, "o_out_calls": 535.0, "o_out_gt10": 278.0, "o_out_talk": 329.92, "o_in_calls": 115.0, "o_in_gt10": 70.0, "o_in_talk": 175.57, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 19, "o_out_calls": 833.0, "o_out_gt10": 378.0, "o_out_talk": 397.1, "o_in_calls": 120.0, "o_in_gt10": 82.0, "o_in_talk": 174.37, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 21, "o_out_calls": 966.0, "o_out_gt10": 454.0, "o_out_talk": 513.05, "o_in_calls": 190.0, "o_in_gt10": 130.0, "o_in_talk": 282.08, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 21, "o_out_calls": 1068.0, "o_out_gt10": 475.0, "o_out_talk": 563.98, "o_in_calls": 188.0, "o_in_gt10": 103.0, "o_in_talk": 199.43, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 14, "o_out_calls": 753.0, "o_out_gt10": 349.0, "o_out_talk": 347.1, "o_in_calls": 95.0, "o_in_gt10": 51.0, "o_in_talk": 96.0, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 21, "o_out_calls": 1004.0, "o_out_gt10": 452.0, "o_out_talk": 446.12, "o_in_calls": 163.0, "o_in_gt10": 102.0, "o_in_talk": 216.08, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 18, "o_out_calls": 748.0, "o_out_gt10": 332.0, "o_out_talk": 356.73, "o_in_calls": 109.0, "o_in_gt10": 77.0, "o_in_talk": 156.73, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 16, "o_out_calls": 951.0, "o_out_gt10": 398.0, "o_out_talk": 415.12, "o_in_calls": 94.0, "o_in_gt10": 66.0, "o_in_talk": 109.45, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 22, "o_out_calls": 1116.0, "o_out_gt10": 452.0, "o_out_talk": 463.35, "o_in_calls": 169.0, "o_in_gt10": 113.0, "o_in_talk": 249.4, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 4, "o_out_calls": 259.0, "o_out_gt10": 95.0, "o_out_talk": 90.33, "o_in_calls": 34.0, "o_in_gt10": 20.0, "o_in_talk": 24.98, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}], "hourly": {"n": 42, "rows": [{"o_out_calls": 327.0, "o_out_gt10": 122.0, "o_out_talk": 105.2, "o_in_calls": 11.0, "o_in_gt10": 5.0, "o_in_talk": 8.25, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 342.0, "o_out_gt10": 154.0, "o_out_talk": 173.37, "o_in_calls": 36.0, "o_in_gt10": 29.0, "o_in_talk": 62.37, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 303.0, "o_out_gt10": 154.0, "o_out_talk": 162.87, "o_in_calls": 47.0, "o_in_gt10": 34.0, "o_in_talk": 61.55, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 312.0, "o_out_gt10": 116.0, "o_out_talk": 114.65, "o_in_calls": 48.0, "o_in_gt10": 36.0, "o_in_talk": 78.77, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 1.0, "o_out_gt10": 1.0, "o_out_talk": 0.55, "o_in_calls": 17.0, "o_in_gt10": 0.0, "o_in_talk": 0.0, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 303.0, "o_out_gt10": 114.0, "o_out_talk": 105.8, "o_in_calls": 47.0, "o_in_gt10": 29.0, "o_in_talk": 63.1, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 280.0, "o_out_gt10": 132.0, "o_out_talk": 148.1, "o_in_calls": 34.0, "o_in_gt10": 26.0, "o_in_talk": 45.4, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 279.0, "o_out_gt10": 91.0, "o_out_talk": 92.55, "o_in_calls": 34.0, "o_in_gt10": 28.0, "o_in_talk": 45.83, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 179.0, "o_out_gt10": 61.0, "o_out_talk": 65.72, "o_in_calls": 15.0, "o_in_gt10": 12.0, "o_in_talk": 18.57, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 5.0, "o_in_gt10": 0.0, "o_in_talk": 0.0, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}]}}, {"name": "Ромашова", "office": true, "mts": true, "phone": "+7 988 670-09-35", "days": [{"o_out_calls": 4.0, "o_out_gt10": 2.0, "o_out_talk": 3.02, "o_in_calls": 3.0, "o_in_gt10": 2.0, "o_in_talk": 8.03, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": false}, {"o_out_calls": 30.0, "o_out_gt10": 9.0, "o_out_talk": 14.87, "o_in_calls": 26.0, "o_in_gt10": 8.0, "o_in_talk": 10.35, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 1.0, "m_in_gt10": 0.0, "m_in_talk": 0.12, "o_missed": 15, "vac": false}, {"o_out_calls": 9.0, "o_out_gt10": 7.0, "o_out_talk": 21.9, "o_in_calls": 17.0, "o_in_gt10": 12.0, "o_in_talk": 17.6, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 5, "vac": false}, {"o_out_calls": 20.0, "o_out_gt10": 12.0, "o_out_talk": 23.47, "o_in_calls": 18.0, "o_in_gt10": 14.0, "o_in_talk": 25.58, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 24.0, "o_out_gt10": 11.0, "o_out_talk": 23.25, "o_in_calls": 21.0, "o_in_gt10": 12.0, "o_in_talk": 39.45, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 9, "vac": false}, {"o_out_calls": 22.0, "o_out_gt10": 15.0, "o_out_talk": 38.57, "o_in_calls": 17.0, "o_in_gt10": 10.0, "o_in_talk": 15.1, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 7, "vac": false}, {"o_out_calls": 16.0, "o_out_gt10": 10.0, "o_out_talk": 26.13, "o_in_calls": 11.0, "o_in_gt10": 7.0, "o_in_talk": 18.08, "m_out_calls": 1.0, "m_out_gt10": 0.0, "m_out_talk": 0.07, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 4, "vac": false}, {"o_out_calls": 29.0, "o_out_gt10": 12.0, "o_out_talk": 37.78, "o_in_calls": 9.0, "o_in_gt10": 5.0, "o_in_talk": 7.55, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 4, "vac": false}, {"o_out_calls": 32.0, "o_out_gt10": 13.0, "o_out_talk": 26.22, "o_in_calls": 5.0, "o_in_gt10": 3.0, "o_in_talk": 5.12, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 2, "vac": false}, {"o_out_calls": 13.0, "o_out_gt10": 7.0, "o_out_talk": 18.08, "o_in_calls": 11.0, "o_in_gt10": 5.0, "o_in_talk": 4.47, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 5, "vac": false}, {"o_out_calls": 13.0, "o_out_gt10": 8.0, "o_out_talk": 19.18, "o_in_calls": 4.0, "o_in_gt10": 3.0, "o_in_talk": 7.75, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 0.4, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": false}, {"o_out_calls": 34.0, "o_out_gt10": 21.0, "o_out_talk": 47.98, "o_in_calls": 20.0, "o_in_gt10": 8.0, "o_in_talk": 10.62, "m_out_calls": 1.0, "m_out_gt10": 0.0, "m_out_talk": 0.1, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 12, "vac": false}, {"o_out_calls": 17.0, "o_out_gt10": 9.0, "o_out_talk": 29.37, "o_in_calls": 8.0, "o_in_gt10": 5.0, "o_in_talk": 22.28, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 13.0, "o_out_gt10": 5.0, "o_out_talk": 3.63, "o_in_calls": 6.0, "o_in_gt10": 5.0, "o_in_talk": 14.88, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": false}, {"o_out_calls": 10.0, "o_out_gt10": 8.0, "o_out_talk": 12.25, "o_in_calls": 7.0, "o_in_gt10": 1.0, "o_in_talk": 1.82, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 6, "vac": false}, {"o_out_calls": 16.0, "o_out_gt10": 14.0, "o_out_talk": 23.92, "o_in_calls": 11.0, "o_in_gt10": 8.0, "o_in_talk": 13.6, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 24.0, "o_out_gt10": 19.0, "o_out_talk": 29.63, "o_in_calls": 19.0, "o_in_gt10": 10.0, "o_in_talk": 49.4, "m_out_calls": 2.0, "m_out_gt10": 1.0, "m_out_talk": 0.93, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 9, "vac": false}, {"o_out_calls": 8.0, "o_out_gt10": 6.0, "o_out_talk": 13.62, "o_in_calls": 4.0, "o_in_gt10": 2.0, "o_in_talk": 5.78, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 1.77, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 3.53, "o_missed": 2, "vac": false}, {"o_out_calls": 11.0, "o_out_gt10": 7.0, "o_out_talk": 19.1, "o_in_calls": 10.0, "o_in_gt10": 3.0, "o_in_talk": 2.97, "m_out_calls": 5.0, "m_out_gt10": 4.0, "m_out_talk": 6.07, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 0.43, "o_missed": 7, "vac": false}, {"o_out_calls": 22.0, "o_out_gt10": 15.0, "o_out_talk": 13.28, "o_in_calls": 23.0, "o_in_gt10": 2.0, "o_in_talk": 1.38, "m_out_calls": 3.0, "m_out_gt10": 3.0, "m_out_talk": 10.25, "m_in_calls": 2.0, "m_in_gt10": 2.0, "m_in_talk": 13.13, "o_missed": 19, "vac": false}, {"o_out_calls": 17.0, "o_out_gt10": 10.0, "o_out_talk": 15.25, "o_in_calls": 11.0, "o_in_gt10": 9.0, "o_in_talk": 28.2, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 2.43, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 2, "vac": false}, {"o_out_calls": 5.0, "o_out_gt10": 3.0, "o_out_talk": 2.05, "o_in_calls": 12.0, "o_in_gt10": 5.0, "o_in_talk": 15.03, "m_out_calls": 8.0, "m_out_gt10": 3.0, "m_out_talk": 14.8, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 0.88, "o_missed": 7, "vac": false}, {"o_out_calls": 9.0, "o_out_gt10": 6.0, "o_out_talk": 9.35, "o_in_calls": 10.0, "o_in_gt10": 7.0, "o_in_talk": 9.72, "m_out_calls": 17.0, "m_out_gt10": 14.0, "m_out_talk": 26.42, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 2.2, "o_missed": 3, "vac": false}, {"o_out_calls": 6.0, "o_out_gt10": 3.0, "o_out_talk": 5.4, "o_in_calls": 5.0, "o_in_gt10": 3.0, "o_in_talk": 9.2, "m_out_calls": 13.0, "m_out_gt10": 12.0, "m_out_talk": 18.88, "m_in_calls": 6.0, "m_in_gt10": 5.0, "m_in_talk": 3.15, "o_missed": 2, "vac": false}, {"o_out_calls": 15.0, "o_out_gt10": 6.0, "o_out_talk": 9.05, "o_in_calls": 12.0, "o_in_gt10": 6.0, "o_in_talk": 6.22, "m_out_calls": 16.0, "m_out_gt10": 16.0, "m_out_talk": 38.48, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 6, "vac": false}, {"o_out_calls": 23.0, "o_out_gt10": 14.0, "o_out_talk": 27.62, "o_in_calls": 10.0, "o_in_gt10": 6.0, "o_in_talk": 8.48, "m_out_calls": 7.0, "m_out_gt10": 6.0, "m_out_talk": 10.0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 4, "vac": false}, {"o_out_calls": 15.0, "o_out_gt10": 6.0, "o_out_talk": 19.6, "o_in_calls": 8.0, "o_in_gt10": 5.0, "o_in_talk": 15.02, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}], "monthly": [{"n": 15, "o_out_calls": 349.0, "o_out_gt10": 216.0, "o_out_talk": 457.07, "o_in_calls": 178.0, "o_in_gt10": 86.0, "o_in_talk": 218.7, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 19, "o_out_calls": 360.0, "o_out_gt10": 203.0, "o_out_talk": 448.82, "o_in_calls": 210.0, "o_in_gt10": 107.0, "o_in_talk": 273.0, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 20, "o_out_calls": 362.0, "o_out_gt10": 236.0, "o_out_talk": 536.98, "o_in_calls": 272.0, "o_in_gt10": 138.0, "o_in_talk": 319.0, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 18, "o_out_calls": 395.0, "o_out_gt10": 240.0, "o_out_talk": 494.7, "o_in_calls": 252.0, "o_in_gt10": 112.0, "o_in_talk": 275.13, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 19, "o_out_calls": 416.0, "o_out_gt10": 266.0, "o_out_talk": 541.35, "o_in_calls": 285.0, "o_in_gt10": 141.0, "o_in_talk": 334.02, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 21, "o_out_calls": 434.0, "o_out_gt10": 264.0, "o_out_talk": 604.72, "o_in_calls": 262.0, "o_in_gt10": 146.0, "o_in_talk": 323.33, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 13, "o_out_calls": 275.0, "o_out_gt10": 148.0, "o_out_talk": 425.25, "o_in_calls": 133.0, "o_in_gt10": 69.0, "o_in_talk": 165.4, "m_out_calls": 4.0, "m_out_gt10": 2.0, "m_out_talk": 1.38, "m_in_calls": 1.0, "m_in_gt10": 0.0, "m_in_talk": 0.12}, {"n": 21, "o_out_calls": 501.0, "o_out_gt10": 243.0, "o_out_talk": 457.42, "o_in_calls": 219.0, "o_in_gt10": 124.0, "o_in_talk": 269.62, "m_out_calls": 5.0, "m_out_gt10": 5.0, "m_out_talk": 2.63, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 1.13}, {"n": 22, "o_out_calls": 394.0, "o_out_gt10": 227.0, "o_out_talk": 468.88, "o_in_calls": 280.0, "o_in_gt10": 144.0, "o_in_talk": 326.73, "m_out_calls": 40.0, "m_out_gt10": 28.0, "m_out_talk": 63.23, "m_in_calls": 7.0, "m_in_gt10": 6.0, "m_in_talk": 20.3}, {"n": 4, "o_out_calls": 59.0, "o_out_gt10": 29.0, "o_out_talk": 61.67, "o_in_calls": 35.0, "o_in_gt10": 20.0, "o_in_talk": 38.92, "m_out_calls": 36.0, "m_out_gt10": 34.0, "m_out_talk": 67.37, "m_in_calls": 6.0, "m_in_gt10": 5.0, "m_in_talk": 3.15}], "hourly": {"n": 47, "rows": [{"o_out_calls": 49.0, "o_out_gt10": 21.0, "o_out_talk": 33.38, "o_in_calls": 17.0, "o_in_gt10": 9.0, "o_in_talk": 33.12, "m_out_calls": 5.0, "m_out_gt10": 4.0, "m_out_talk": 2.48, "m_in_calls": 2.0, "m_in_gt10": 1.0, "m_in_talk": 0.27}, {"o_out_calls": 173.0, "o_out_gt10": 95.0, "o_out_talk": 181.5, "o_in_calls": 75.0, "o_in_gt10": 53.0, "o_in_talk": 96.92, "m_out_calls": 14.0, "m_out_gt10": 12.0, "m_out_talk": 26.47, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 176.0, "o_out_gt10": 98.0, "o_out_talk": 198.13, "o_in_calls": 106.0, "o_in_gt10": 54.0, "o_in_talk": 115.9, "m_out_calls": 18.0, "m_out_gt10": 13.0, "m_out_talk": 33.83, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 1.02}, {"o_out_calls": 168.0, "o_out_gt10": 85.0, "o_out_talk": 151.68, "o_in_calls": 71.0, "o_in_gt10": 36.0, "o_in_talk": 69.62, "m_out_calls": 10.0, "m_out_gt10": 9.0, "m_out_talk": 23.17, "m_in_calls": 2.0, "m_in_gt10": 1.0, "m_in_talk": 0.55}, {"o_out_calls": 13.0, "o_out_gt10": 7.0, "o_out_talk": 22.73, "o_in_calls": 34.0, "o_in_gt10": 11.0, "o_in_talk": 36.47, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 1.82, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 107.0, "o_out_gt10": 63.0, "o_out_talk": 130.63, "o_in_calls": 57.0, "o_in_gt10": 26.0, "o_in_talk": 64.75, "m_out_calls": 5.0, "m_out_gt10": 5.0, "m_out_talk": 7.15, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 0.45}, {"o_out_calls": 100.0, "o_out_gt10": 49.0, "o_out_talk": 106.82, "o_in_calls": 71.0, "o_in_gt10": 43.0, "o_in_talk": 109.02, "m_out_calls": 16.0, "m_out_gt10": 14.0, "m_out_talk": 29.77, "m_in_calls": 3.0, "m_in_gt10": 3.0, "m_in_talk": 4.95}, {"o_out_calls": 114.0, "o_out_gt10": 54.0, "o_out_talk": 114.4, "o_in_calls": 66.0, "o_in_gt10": 44.0, "o_in_talk": 90.1, "m_out_calls": 8.0, "m_out_gt10": 6.0, "m_out_talk": 4.5, "m_in_calls": 3.0, "m_in_gt10": 3.0, "m_in_talk": 14.02}, {"o_out_calls": 54.0, "o_out_gt10": 27.0, "o_out_talk": 48.68, "o_in_calls": 31.0, "o_in_gt10": 10.0, "o_in_talk": 18.33, "m_out_calls": 4.0, "m_out_gt10": 3.0, "m_out_talk": 4.05, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 1.13}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 4.0, "o_in_gt10": 2.0, "o_in_talk": 1.05, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 2.2}]}}, {"name": "Пугачева", "office": true, "mts": true, "phone": "+7 918 623-88-04", "days": [{"o_out_calls": 26.0, "o_out_gt10": 8.0, "o_out_talk": 10.35, "o_in_calls": 13.0, "o_in_gt10": 9.0, "o_in_talk": 22.87, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 0.38, "o_missed": 4, "vac": false}, {"o_out_calls": 33.0, "o_out_gt10": 15.0, "o_out_talk": 22.87, "o_in_calls": 15.0, "o_in_gt10": 10.0, "o_in_talk": 14.15, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 11.97, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 5, "vac": false}, {"o_out_calls": 25.0, "o_out_gt10": 10.0, "o_out_talk": 8.03, "o_in_calls": 5.0, "o_in_gt10": 5.0, "o_in_talk": 10.03, "m_out_calls": 3.0, "m_out_gt10": 2.0, "m_out_talk": 3.15, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 39.0, "o_out_gt10": 13.0, "o_out_talk": 16.15, "o_in_calls": 7.0, "o_in_gt10": 7.0, "o_in_talk": 11.55, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 19.0, "o_out_gt10": 9.0, "o_out_talk": 9.62, "o_in_calls": 11.0, "o_in_gt10": 8.0, "o_in_talk": 16.98, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 24.0, "o_out_gt10": 7.0, "o_out_talk": 6.75, "o_in_calls": 8.0, "o_in_gt10": 7.0, "o_in_talk": 11.43, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 0.35, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": false}, {"o_out_calls": 22.0, "o_out_gt10": 10.0, "o_out_talk": 10.07, "o_in_calls": 7.0, "o_in_gt10": 5.0, "o_in_talk": 14.3, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 0.23, "o_missed": 2, "vac": false}, {"o_out_calls": 32.0, "o_out_gt10": 20.0, "o_out_talk": 26.03, "o_in_calls": 9.0, "o_in_gt10": 8.0, "o_in_talk": 12.63, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": false}, {"o_out_calls": 33.0, "o_out_gt10": 17.0, "o_out_talk": 23.47, "o_in_calls": 12.0, "o_in_gt10": 9.0, "o_in_talk": 14.2, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 1.93, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 16.0, "o_out_gt10": 10.0, "o_out_talk": 9.48, "o_in_calls": 7.0, "o_in_gt10": 4.0, "o_in_talk": 7.17, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 0.25, "o_missed": 3, "vac": false}, {"o_out_calls": 3.0, "o_out_gt10": 3.0, "o_out_talk": 5.72, "o_in_calls": 5.0, "o_in_gt10": 2.0, "o_in_talk": 1.22, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 29.0, "o_out_gt10": 7.0, "o_out_talk": 7.95, "o_in_calls": 7.0, "o_in_gt10": 4.0, "o_in_talk": 10.18, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 0.38, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 2, "vac": false}, {"o_out_calls": 31.0, "o_out_gt10": 21.0, "o_out_talk": 26.27, "o_in_calls": 10.0, "o_in_gt10": 5.0, "o_in_talk": 12.93, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 5, "vac": false}, {"o_out_calls": 32.0, "o_out_gt10": 16.0, "o_out_talk": 21.63, "o_in_calls": 8.0, "o_in_gt10": 7.0, "o_in_talk": 8.55, "m_out_calls": 2.0, "m_out_gt10": 2.0, "m_out_talk": 1.13, "m_in_calls": 2.0, "m_in_gt10": 2.0, "m_in_talk": 2.9, "o_missed": 1, "vac": false}, {"o_out_calls": 22.0, "o_out_gt10": 13.0, "o_out_talk": 15.82, "o_in_calls": 11.0, "o_in_gt10": 7.0, "o_in_talk": 10.25, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 4, "vac": false}, {"o_out_calls": 35.0, "o_out_gt10": 20.0, "o_out_talk": 22.13, "o_in_calls": 7.0, "o_in_gt10": 5.0, "o_in_talk": 5.27, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 0.85, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 2, "vac": false}, {"o_out_calls": 43.0, "o_out_gt10": 15.0, "o_out_talk": 19.88, "o_in_calls": 10.0, "o_in_gt10": 6.0, "o_in_talk": 10.72, "m_out_calls": 1.0, "m_out_gt10": 0.0, "m_out_talk": 0.02, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 0.23, "o_missed": 4, "vac": false}, {"o_out_calls": 41.0, "o_out_gt10": 17.0, "o_out_talk": 18.57, "o_in_calls": 10.0, "o_in_gt10": 4.0, "o_in_talk": 5.17, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 1.6, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 5, "vac": false}, {"o_out_calls": 35.0, "o_out_gt10": 12.0, "o_out_talk": 12.58, "o_in_calls": 8.0, "o_in_gt10": 5.0, "o_in_talk": 18.32, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 0.65, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 27.0, "o_out_gt10": 9.0, "o_out_talk": 9.08, "o_in_calls": 7.0, "o_in_gt10": 4.0, "o_in_talk": 5.82, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 23.0, "o_out_gt10": 13.0, "o_out_talk": 19.6, "o_in_calls": 9.0, "o_in_gt10": 7.0, "o_in_talk": 10.77, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 2, "vac": false}, {"o_out_calls": 32.0, "o_out_gt10": 15.0, "o_out_talk": 14.05, "o_in_calls": 9.0, "o_in_gt10": 6.0, "o_in_talk": 10.83, "m_out_calls": 1.0, "m_out_gt10": 0.0, "m_out_talk": 0.1, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 36.0, "o_out_gt10": 21.0, "o_out_talk": 35.3, "o_in_calls": 18.0, "o_in_gt10": 13.0, "o_in_talk": 17.42, "m_out_calls": 6.0, "m_out_gt10": 3.0, "m_out_talk": 3.63, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 5, "vac": false}, {"o_out_calls": 40.0, "o_out_gt10": 18.0, "o_out_talk": 25.18, "o_in_calls": 17.0, "o_in_gt10": 12.0, "o_in_talk": 21.97, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 1.17, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 5, "vac": false}, {"o_out_calls": 13.0, "o_out_gt10": 6.0, "o_out_talk": 9.85, "o_in_calls": 18.0, "o_in_gt10": 13.0, "o_in_talk": 22.23, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 1.1, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 5, "vac": false}, {"o_out_calls": 32.0, "o_out_gt10": 11.0, "o_out_talk": 9.7, "o_in_calls": 5.0, "o_in_gt10": 5.0, "o_in_talk": 4.52, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 25.0, "o_out_gt10": 10.0, "o_out_talk": 15.2, "o_in_calls": 12.0, "o_in_gt10": 6.0, "o_in_talk": 14.92, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 5, "vac": false}], "monthly": [{"n": 15, "o_out_calls": 328.0, "o_out_gt10": 189.0, "o_out_talk": 238.48, "o_in_calls": 133.0, "o_in_gt10": 100.0, "o_in_talk": 180.82, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 19, "o_out_calls": 485.0, "o_out_gt10": 262.0, "o_out_talk": 345.2, "o_in_calls": 158.0, "o_in_gt10": 102.0, "o_in_talk": 174.27, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 21, "o_out_calls": 636.0, "o_out_gt10": 313.0, "o_out_talk": 407.47, "o_in_calls": 182.0, "o_in_gt10": 116.0, "o_in_talk": 196.58, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 19, "o_out_calls": 667.0, "o_out_gt10": 305.0, "o_out_talk": 367.37, "o_in_calls": 182.0, "o_in_gt10": 108.0, "o_in_talk": 174.22, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 17, "o_out_calls": 568.0, "o_out_gt10": 270.0, "o_out_talk": 352.87, "o_in_calls": 162.0, "o_in_gt10": 100.0, "o_in_talk": 170.78, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 21, "o_out_calls": 668.0, "o_out_gt10": 331.0, "o_out_talk": 402.57, "o_in_calls": 209.0, "o_in_gt10": 161.0, "o_in_talk": 292.02, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 23, "o_out_calls": 732.0, "o_out_gt10": 363.0, "o_out_talk": 481.58, "o_in_calls": 236.0, "o_in_gt10": 160.0, "o_in_talk": 320.2, "m_out_calls": 25.0, "m_out_gt10": 19.0, "m_out_talk": 27.65, "m_in_calls": 2.0, "m_in_gt10": 2.0, "m_in_talk": 1.12}, {"n": 21, "o_out_calls": 552.0, "o_out_gt10": 256.0, "o_out_talk": 335.52, "o_in_calls": 202.0, "o_in_gt10": 146.0, "o_in_talk": 267.28, "m_out_calls": 11.0, "m_out_gt10": 7.0, "m_out_talk": 2.4, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 0.38}, {"n": 22, "o_out_calls": 632.0, "o_out_gt10": 293.0, "o_out_talk": 361.05, "o_in_calls": 200.0, "o_in_gt10": 138.0, "o_in_talk": 239.88, "m_out_calls": 20.0, "m_out_gt10": 14.0, "m_out_talk": 25.77, "m_in_calls": 5.0, "m_in_gt10": 5.0, "m_in_talk": 3.62}, {"n": 4, "o_out_calls": 110.0, "o_out_gt10": 45.0, "o_out_talk": 59.93, "o_in_calls": 52.0, "o_in_gt10": 36.0, "o_in_talk": 63.63, "m_out_calls": 2.0, "m_out_gt10": 2.0, "m_out_talk": 2.27, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}], "hourly": {"n": 47, "rows": [{"o_out_calls": 78.0, "o_out_gt10": 34.0, "o_out_talk": 55.58, "o_in_calls": 13.0, "o_in_gt10": 9.0, "o_in_talk": 11.78, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 163.0, "o_out_gt10": 94.0, "o_out_talk": 129.77, "o_in_calls": 57.0, "o_in_gt10": 44.0, "o_in_talk": 87.53, "m_out_calls": 3.0, "m_out_gt10": 2.0, "m_out_talk": 1.25, "m_in_calls": 3.0, "m_in_gt10": 3.0, "m_in_talk": 1.78}, {"o_out_calls": 178.0, "o_out_gt10": 97.0, "o_out_talk": 117.35, "o_in_calls": 82.0, "o_in_gt10": 67.0, "o_in_talk": 119.33, "m_out_calls": 6.0, "m_out_gt10": 5.0, "m_out_talk": 6.6, "m_in_calls": 2.0, "m_in_gt10": 2.0, "m_in_talk": 1.98}, {"o_out_calls": 196.0, "o_out_gt10": 88.0, "o_out_talk": 110.97, "o_in_calls": 66.0, "o_in_gt10": 45.0, "o_in_talk": 64.12, "m_out_calls": 3.0, "m_out_gt10": 1.0, "m_out_talk": 2.08, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 9.0, "o_out_gt10": 8.0, "o_out_talk": 15.12, "o_in_calls": 35.0, "o_in_gt10": 19.0, "o_in_talk": 27.6, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 124.0, "o_out_gt10": 63.0, "o_out_talk": 65.4, "o_in_calls": 42.0, "o_in_gt10": 37.0, "o_in_talk": 68.4, "m_out_calls": 3.0, "m_out_gt10": 1.0, "m_out_talk": 0.47, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 0.23}, {"o_out_calls": 206.0, "o_out_gt10": 87.0, "o_out_talk": 113.83, "o_in_calls": 66.0, "o_in_gt10": 44.0, "o_in_talk": 83.27, "m_out_calls": 6.0, "m_out_gt10": 5.0, "m_out_talk": 15.53, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 202.0, "o_out_gt10": 73.0, "o_out_talk": 90.37, "o_in_calls": 57.0, "o_in_gt10": 42.0, "o_in_talk": 85.87, "m_out_calls": 10.0, "m_out_gt10": 7.0, "m_out_talk": 3.37, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 138.0, "o_out_gt10": 50.0, "o_out_talk": 58.12, "o_in_calls": 25.0, "o_in_gt10": 13.0, "o_in_talk": 22.9, "m_out_calls": 2.0, "m_out_gt10": 2.0, "m_out_talk": 1.13, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 9.0, "o_in_gt10": 0.0, "o_in_talk": 0.0, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}]}}, {"name": "Ковязина", "office": true, "mts": true, "phone": "+7 918 623-84-89", "days": [{"o_out_calls": 24.0, "o_out_gt10": 13.0, "o_out_talk": 15.73, "o_in_calls": 10.0, "o_in_gt10": 5.0, "o_in_talk": 11.92, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 0.55, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 4, "vac": false}, {"o_out_calls": 26.0, "o_out_gt10": 10.0, "o_out_talk": 13.18, "o_in_calls": 2.0, "o_in_gt10": 2.0, "o_in_talk": 2.12, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 41.0, "o_out_gt10": 16.0, "o_out_talk": 15.32, "o_in_calls": 3.0, "o_in_gt10": 3.0, "o_in_talk": 3.65, "m_out_calls": 2.0, "m_out_gt10": 2.0, "m_out_talk": 2.98, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 29.0, "o_out_gt10": 15.0, "o_out_talk": 16.52, "o_in_calls": 10.0, "o_in_gt10": 6.0, "o_in_talk": 26.33, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 20.0, "o_out_gt10": 8.0, "o_out_talk": 9.22, "o_in_calls": 11.0, "o_in_gt10": 7.0, "o_in_talk": 18.42, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 21.0, "o_out_gt10": 14.0, "o_out_talk": 20.03, "o_in_calls": 10.0, "o_in_gt10": 4.0, "o_in_talk": 4.22, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 1.07, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 5, "vac": false}, {"o_out_calls": 16.0, "o_out_gt10": 9.0, "o_out_talk": 13.23, "o_in_calls": 14.0, "o_in_gt10": 10.0, "o_in_talk": 26.77, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 0.27, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 21.0, "o_out_gt10": 10.0, "o_out_talk": 17.8, "o_in_calls": 9.0, "o_in_gt10": 6.0, "o_in_talk": 8.18, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 0.75, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 24.0, "o_out_gt10": 10.0, "o_out_talk": 14.82, "o_in_calls": 5.0, "o_in_gt10": 3.0, "o_in_talk": 6.62, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 2, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 2.0, "o_in_gt10": 0.0, "o_in_talk": 0.0, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 2, "vac": false}, {"o_out_calls": 18.0, "o_out_gt10": 8.0, "o_out_talk": 9.57, "o_in_calls": 13.0, "o_in_gt10": 9.0, "o_in_talk": 8.72, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 4, "vac": false}, {"o_out_calls": 28.0, "o_out_gt10": 15.0, "o_out_talk": 16.65, "o_in_calls": 9.0, "o_in_gt10": 6.0, "o_in_talk": 5.65, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 24.0, "o_out_gt10": 12.0, "o_out_talk": 9.17, "o_in_calls": 15.0, "o_in_gt10": 8.0, "o_in_talk": 12.42, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 6, "vac": false}, {"o_out_calls": 31.0, "o_out_gt10": 16.0, "o_out_talk": 22.15, "o_in_calls": 9.0, "o_in_gt10": 8.0, "o_in_talk": 11.53, "m_out_calls": 2.0, "m_out_gt10": 1.0, "m_out_talk": 0.73, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": false}, {"o_out_calls": 17.0, "o_out_gt10": 9.0, "o_out_talk": 11.5, "o_in_calls": 9.0, "o_in_gt10": 8.0, "o_in_talk": 10.4, "m_out_calls": 3.0, "m_out_gt10": 3.0, "m_out_talk": 6.85, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 6.0, "o_in_gt10": 2.0, "o_in_talk": 2.55, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 4, "vac": true}, {"o_out_calls": 2.0, "o_out_gt10": 2.0, "o_out_talk": 4.43, "o_in_calls": 6.0, "o_in_gt10": 4.0, "o_in_talk": 16.98, "m_out_calls": 1.0, "m_out_gt10": 0.0, "m_out_talk": 0.05, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 2, "vac": true}, {"o_out_calls": 3.0, "o_out_gt10": 1.0, "o_out_talk": 0.77, "o_in_calls": 8.0, "o_in_gt10": 6.0, "o_in_talk": 13.9, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 2, "vac": true}, {"o_out_calls": 4.0, "o_out_gt10": 2.0, "o_out_talk": 5.48, "o_in_calls": 4.0, "o_in_gt10": 3.0, "o_in_talk": 5.47, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": true}, {"o_out_calls": 1.0, "o_out_gt10": 1.0, "o_out_talk": 0.67, "o_in_calls": 4.0, "o_in_gt10": 3.0, "o_in_talk": 7.98, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": true}, {"o_out_calls": 19.0, "o_out_gt10": 10.0, "o_out_talk": 8.17, "o_in_calls": 7.0, "o_in_gt10": 6.0, "o_in_talk": 4.38, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": false}, {"o_out_calls": 15.0, "o_out_gt10": 3.0, "o_out_talk": 2.22, "o_in_calls": 12.0, "o_in_gt10": 10.0, "o_in_talk": 23.08, "m_out_calls": 2.0, "m_out_gt10": 0.0, "m_out_talk": 0.12, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 2, "vac": false}, {"o_out_calls": 33.0, "o_out_gt10": 19.0, "o_out_talk": 18.88, "o_in_calls": 12.0, "o_in_gt10": 6.0, "o_in_talk": 8.0, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 0.98, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 6, "vac": false}, {"o_out_calls": 17.0, "o_out_gt10": 9.0, "o_out_talk": 18.83, "o_in_calls": 13.0, "o_in_gt10": 10.0, "o_in_talk": 20.0, "m_out_calls": 3.0, "m_out_gt10": 3.0, "m_out_talk": 18.25, "m_in_calls": 3.0, "m_in_gt10": 3.0, "m_in_talk": 7.63, "o_missed": 3, "vac": false}, {"o_out_calls": 19.0, "o_out_gt10": 11.0, "o_out_talk": 5.42, "o_in_calls": 3.0, "o_in_gt10": 2.0, "o_in_talk": 1.73, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 0.82, "o_missed": 0, "vac": false}, {"o_out_calls": 25.0, "o_out_gt10": 15.0, "o_out_talk": 26.32, "o_in_calls": 13.0, "o_in_gt10": 8.0, "o_in_talk": 11.92, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 4, "vac": false}, {"o_out_calls": 26.0, "o_out_gt10": 17.0, "o_out_talk": 18.35, "o_in_calls": 10.0, "o_in_gt10": 4.0, "o_in_talk": 10.33, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 5, "vac": false}], "monthly": [{"n": 15, "o_out_calls": 237.0, "o_out_gt10": 138.0, "o_out_talk": 204.0, "o_in_calls": 122.0, "o_in_gt10": 81.0, "o_in_talk": 190.07, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 19, "o_out_calls": 427.0, "o_out_gt10": 246.0, "o_out_talk": 403.05, "o_in_calls": 255.0, "o_in_gt10": 153.0, "o_in_talk": 337.7, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 21, "o_out_calls": 569.0, "o_out_gt10": 300.0, "o_out_talk": 407.13, "o_in_calls": 227.0, "o_in_gt10": 153.0, "o_in_talk": 316.97, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 17, "o_out_calls": 405.0, "o_out_gt10": 229.0, "o_out_talk": 322.38, "o_in_calls": 225.0, "o_in_gt10": 142.0, "o_in_talk": 224.3, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 19, "o_out_calls": 426.0, "o_out_gt10": 225.0, "o_out_talk": 305.8, "o_in_calls": 218.0, "o_in_gt10": 149.0, "o_in_talk": 255.37, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 21, "o_out_calls": 647.0, "o_out_gt10": 328.0, "o_out_talk": 413.33, "o_in_calls": 208.0, "o_in_gt10": 159.0, "o_in_talk": 259.55, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 17, "o_out_calls": 384.0, "o_out_gt10": 206.0, "o_out_talk": 294.78, "o_in_calls": 200.0, "o_in_gt10": 140.0, "o_in_talk": 241.4, "m_out_calls": 10.0, "m_out_gt10": 8.0, "m_out_talk": 8.9, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 19, "o_out_calls": 444.0, "o_out_gt10": 246.0, "o_out_talk": 295.78, "o_in_calls": 170.0, "o_in_gt10": 119.0, "o_in_talk": 207.45, "m_out_calls": 5.0, "m_out_gt10": 4.0, "m_out_talk": 4.4, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 17, "o_out_calls": 383.0, "o_out_gt10": 184.0, "o_out_talk": 218.42, "o_in_calls": 152.0, "o_in_gt10": 102.0, "o_in_talk": 180.48, "m_out_calls": 13.0, "m_out_gt10": 10.0, "m_out_talk": 13.75, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 4, "o_out_calls": 87.0, "o_out_gt10": 52.0, "o_out_talk": 68.92, "o_in_calls": 39.0, "o_in_gt10": 24.0, "o_in_talk": 43.98, "m_out_calls": 3.0, "m_out_gt10": 3.0, "m_out_talk": 18.25, "m_in_calls": 4.0, "m_in_gt10": 4.0, "m_in_talk": 8.45}], "hourly": {"n": 40, "rows": [{"o_out_calls": 61.0, "o_out_gt10": 32.0, "o_out_talk": 29.55, "o_in_calls": 18.0, "o_in_gt10": 14.0, "o_in_talk": 24.93, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 0.82}, {"o_out_calls": 158.0, "o_out_gt10": 78.0, "o_out_talk": 64.45, "o_in_calls": 55.0, "o_in_gt10": 44.0, "o_in_talk": 61.45, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 0.27, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 176.0, "o_out_gt10": 99.0, "o_out_talk": 110.63, "o_in_calls": 60.0, "o_in_gt10": 41.0, "o_in_talk": 63.53, "m_out_calls": 4.0, "m_out_gt10": 3.0, "m_out_talk": 2.42, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 136.0, "o_out_gt10": 78.0, "o_out_talk": 102.68, "o_in_calls": 56.0, "o_in_gt10": 33.0, "o_in_talk": 63.58, "m_out_calls": 4.0, "m_out_gt10": 3.0, "m_out_talk": 3.7, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 3.0, "o_out_gt10": 2.0, "o_out_talk": 4.3, "o_in_calls": 23.0, "o_in_gt10": 8.0, "o_in_talk": 25.25, "m_out_calls": 2.0, "m_out_gt10": 2.0, "m_out_talk": 5.57, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 112.0, "o_out_gt10": 60.0, "o_out_talk": 93.77, "o_in_calls": 34.0, "o_in_gt10": 21.0, "o_in_talk": 37.07, "m_out_calls": 5.0, "m_out_gt10": 3.0, "m_out_talk": 19.38, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 5.98}, {"o_out_calls": 127.0, "o_out_gt10": 62.0, "o_out_talk": 72.48, "o_in_calls": 42.0, "o_in_gt10": 33.0, "o_in_talk": 57.82, "m_out_calls": 2.0, "m_out_gt10": 2.0, "m_out_talk": 2.55, "m_in_calls": 2.0, "m_in_gt10": 2.0, "m_in_talk": 1.65}, {"o_out_calls": 93.0, "o_out_gt10": 41.0, "o_out_talk": 57.93, "o_in_calls": 38.0, "o_in_gt10": 31.0, "o_in_talk": 58.18, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 0.55, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 48.0, "o_out_gt10": 30.0, "o_out_talk": 47.32, "o_in_calls": 24.0, "o_in_gt10": 20.0, "o_in_talk": 40.08, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 1.28, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 8.0, "o_in_gt10": 0.0, "o_in_talk": 0.02, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 0.68, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}]}}, {"name": "Некрасова", "office": true, "mts": true, "phone": "+7 988 670-02-23", "days": [{"o_out_calls": 11.0, "o_out_gt10": 7.0, "o_out_talk": 19.75, "o_in_calls": 13.0, "o_in_gt10": 11.0, "o_in_talk": 19.68, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 0.77, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 2, "vac": false}, {"o_out_calls": 14.0, "o_out_gt10": 5.0, "o_out_talk": 4.93, "o_in_calls": 4.0, "o_in_gt10": 4.0, "o_in_talk": 14.28, "m_out_calls": 9.0, "m_out_gt10": 8.0, "m_out_talk": 7.75, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 17.0, "o_out_gt10": 11.0, "o_out_talk": 37.55, "o_in_calls": 11.0, "o_in_gt10": 10.0, "o_in_talk": 27.68, "m_out_calls": 2.0, "m_out_gt10": 2.0, "m_out_talk": 3.82, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 1.95, "o_missed": 1, "vac": false}, {"o_out_calls": 8.0, "o_out_gt10": 3.0, "o_out_talk": 29.48, "o_in_calls": 8.0, "o_in_gt10": 7.0, "o_in_talk": 16.62, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": false}, {"o_out_calls": 20.0, "o_out_gt10": 11.0, "o_out_talk": 19.4, "o_in_calls": 18.0, "o_in_gt10": 13.0, "o_in_talk": 37.87, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 5, "vac": false}, {"o_out_calls": 7.0, "o_out_gt10": 5.0, "o_out_talk": 9.33, "o_in_calls": 4.0, "o_in_gt10": 4.0, "o_in_talk": 24.22, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 13.0, "o_out_gt10": 7.0, "o_out_talk": 11.87, "o_in_calls": 4.0, "o_in_gt10": 4.0, "o_in_talk": 12.08, "m_out_calls": 1.0, "m_out_gt10": 0.0, "m_out_talk": 0.05, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 12.0, "o_out_gt10": 9.0, "o_out_talk": 40.38, "o_in_calls": 8.0, "o_in_gt10": 3.0, "o_in_talk": 10.07, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 4, "vac": false}, {"o_out_calls": 40.0, "o_out_gt10": 17.0, "o_out_talk": 23.2, "o_in_calls": 11.0, "o_in_gt10": 6.0, "o_in_talk": 12.7, "m_out_calls": 1.0, "m_out_gt10": 0.0, "m_out_talk": 0.08, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 5, "vac": false}, {"o_out_calls": 8.0, "o_out_gt10": 6.0, "o_out_talk": 10.22, "o_in_calls": 3.0, "o_in_gt10": 2.0, "o_in_talk": 1.38, "m_out_calls": 3.0, "m_out_gt10": 2.0, "m_out_talk": 5.22, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 18.0, "o_out_gt10": 10.0, "o_out_talk": 18.45, "o_in_calls": 10.0, "o_in_gt10": 9.0, "o_in_talk": 31.02, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": false}, {"o_out_calls": 14.0, "o_out_gt10": 5.0, "o_out_talk": 8.53, "o_in_calls": 11.0, "o_in_gt10": 9.0, "o_in_talk": 55.97, "m_out_calls": 2.0, "m_out_gt10": 1.0, "m_out_talk": 1.58, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 2, "vac": false}, {"o_out_calls": 16.0, "o_out_gt10": 6.0, "o_out_talk": 14.88, "o_in_calls": 8.0, "o_in_gt10": 8.0, "o_in_talk": 21.97, "m_out_calls": 2.0, "m_out_gt10": 1.0, "m_out_talk": 3.13, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 13.0, "o_out_gt10": 5.0, "o_out_talk": 15.72, "o_in_calls": 4.0, "o_in_gt10": 3.0, "o_in_talk": 8.48, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 17.0, "o_out_gt10": 13.0, "o_out_talk": 36.23, "o_in_calls": 5.0, "o_in_gt10": 3.0, "o_in_talk": 8.65, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 0.25, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 2, "vac": false}, {"o_out_calls": 22.0, "o_out_gt10": 11.0, "o_out_talk": 13.18, "o_in_calls": 8.0, "o_in_gt10": 5.0, "o_in_talk": 15.65, "m_out_calls": 8.0, "m_out_gt10": 8.0, "m_out_talk": 12.17, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 2, "vac": false}, {"o_out_calls": 16.0, "o_out_gt10": 12.0, "o_out_talk": 30.15, "o_in_calls": 3.0, "o_in_gt10": 2.0, "o_in_talk": 16.72, "m_out_calls": 1.0, "m_out_gt10": 0.0, "m_out_talk": 0.1, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": false}, {"o_out_calls": 21.0, "o_out_gt10": 12.0, "o_out_talk": 20.25, "o_in_calls": 9.0, "o_in_gt10": 8.0, "o_in_talk": 32.52, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": false}, {"o_out_calls": 10.0, "o_out_gt10": 4.0, "o_out_talk": 2.73, "o_in_calls": 7.0, "o_in_gt10": 5.0, "o_in_talk": 19.33, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 2, "vac": false}, {"o_out_calls": 17.0, "o_out_gt10": 6.0, "o_out_talk": 9.9, "o_in_calls": 10.0, "o_in_gt10": 8.0, "o_in_talk": 15.47, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 2, "vac": false}, {"o_out_calls": 26.0, "o_out_gt10": 20.0, "o_out_talk": 30.35, "o_in_calls": 11.0, "o_in_gt10": 7.0, "o_in_talk": 11.53, "m_out_calls": 2.0, "m_out_gt10": 2.0, "m_out_talk": 0.9, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 20.0, "o_out_gt10": 11.0, "o_out_talk": 18.27, "o_in_calls": 9.0, "o_in_gt10": 5.0, "o_in_talk": 6.82, "m_out_calls": 1.0, "m_out_gt10": 0.0, "m_out_talk": 0.1, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 4, "vac": false}, {"o_out_calls": 22.0, "o_out_gt10": 14.0, "o_out_talk": 18.52, "o_in_calls": 6.0, "o_in_gt10": 4.0, "o_in_talk": 15.83, "m_out_calls": 5.0, "m_out_gt10": 3.0, "m_out_talk": 7.83, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 2, "vac": false}, {"o_out_calls": 21.0, "o_out_gt10": 11.0, "o_out_talk": 34.58, "o_in_calls": 7.0, "o_in_gt10": 6.0, "o_in_talk": 15.58, "m_out_calls": 6.0, "m_out_gt10": 4.0, "m_out_talk": 8.22, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": false}, {"o_out_calls": 16.0, "o_out_gt10": 5.0, "o_out_talk": 6.98, "o_in_calls": 2.0, "o_in_gt10": 1.0, "o_in_talk": 1.27, "m_out_calls": 11.0, "m_out_gt10": 10.0, "m_out_talk": 15.17, "m_in_calls": 2.0, "m_in_gt10": 2.0, "m_in_talk": 6.92, "o_missed": 1, "vac": false}, {"o_out_calls": 17.0, "o_out_gt10": 11.0, "o_out_talk": 38.67, "o_in_calls": 6.0, "o_in_gt10": 5.0, "o_in_talk": 12.0, "m_out_calls": 5.0, "m_out_gt10": 4.0, "m_out_talk": 3.95, "m_in_calls": 2.0, "m_in_gt10": 2.0, "m_in_talk": 3.3, "o_missed": 1, "vac": false}, {"o_out_calls": 24.0, "o_out_gt10": 13.0, "o_out_talk": 25.7, "o_in_calls": 7.0, "o_in_gt10": 6.0, "o_in_talk": 10.27, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": false}], "monthly": [{"n": 15, "o_out_calls": 136.0, "o_out_gt10": 90.0, "o_out_talk": 259.53, "o_in_calls": 137.0, "o_in_gt10": 82.0, "o_in_talk": 240.5, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 13, "o_out_calls": 210.0, "o_out_gt10": 135.0, "o_out_talk": 359.47, "o_in_calls": 107.0, "o_in_gt10": 65.0, "o_in_talk": 227.17, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 11, "o_out_calls": 122.0, "o_out_gt10": 74.0, "o_out_talk": 136.68, "o_in_calls": 71.0, "o_in_gt10": 44.0, "o_in_talk": 105.82, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 21, "o_out_calls": 523.0, "o_out_gt10": 272.0, "o_out_talk": 407.02, "o_in_calls": 128.0, "o_in_gt10": 85.0, "o_in_talk": 185.38, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 19, "o_out_calls": 503.0, "o_out_gt10": 240.0, "o_out_talk": 303.9, "o_in_calls": 161.0, "o_in_gt10": 108.0, "o_in_talk": 282.22, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 19, "o_out_calls": 479.0, "o_out_gt10": 242.0, "o_out_talk": 562.0, "o_in_calls": 173.0, "o_in_gt10": 117.0, "o_in_talk": 324.62, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 20, "o_out_calls": 433.0, "o_out_gt10": 221.0, "o_out_talk": 526.23, "o_in_calls": 192.0, "o_in_gt10": 131.0, "o_in_talk": 426.28, "m_out_calls": 35.0, "m_out_gt10": 29.0, "m_out_talk": 51.48, "m_in_calls": 4.0, "m_in_gt10": 3.0, "m_in_talk": 4.3}, {"n": 21, "o_out_calls": 460.0, "o_out_gt10": 225.0, "o_out_talk": 439.8, "o_in_calls": 130.0, "o_in_gt10": 106.0, "o_in_talk": 256.35, "m_out_calls": 59.0, "m_out_gt10": 48.0, "m_out_talk": 76.7, "m_in_calls": 2.0, "m_in_gt10": 2.0, "m_in_talk": 8.9}, {"n": 22, "o_out_calls": 371.0, "o_out_gt10": 203.0, "o_out_talk": 423.53, "o_in_calls": 172.0, "o_in_gt10": 129.0, "o_in_talk": 416.85, "m_out_calls": 38.0, "m_out_gt10": 28.0, "m_out_talk": 42.98, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 1.95}, {"n": 4, "o_out_calls": 78.0, "o_out_gt10": 40.0, "o_out_talk": 105.93, "o_in_calls": 22.0, "o_in_gt10": 18.0, "o_in_talk": 39.12, "m_out_calls": 22.0, "m_out_gt10": 18.0, "m_out_talk": 27.33, "m_in_calls": 4.0, "m_in_gt10": 4.0, "m_in_talk": 10.22}], "hourly": {"n": 47, "rows": [{"o_out_calls": 47.0, "o_out_gt10": 23.0, "o_out_talk": 30.23, "o_in_calls": 7.0, "o_in_gt10": 5.0, "o_in_talk": 6.73, "m_out_calls": 10.0, "m_out_gt10": 8.0, "m_out_talk": 10.65, "m_in_calls": 3.0, "m_in_gt10": 3.0, "m_in_talk": 5.25}, {"o_out_calls": 112.0, "o_out_gt10": 63.0, "o_out_talk": 114.83, "o_in_calls": 31.0, "o_in_gt10": 26.0, "o_in_talk": 86.05, "m_out_calls": 20.0, "m_out_gt10": 17.0, "m_out_talk": 15.43, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 5.93}, {"o_out_calls": 131.0, "o_out_gt10": 66.0, "o_out_talk": 156.97, "o_in_calls": 39.0, "o_in_gt10": 34.0, "o_in_talk": 116.63, "m_out_calls": 21.0, "m_out_gt10": 16.0, "m_out_talk": 24.57, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 2.97}, {"o_out_calls": 117.0, "o_out_gt10": 81.0, "o_out_talk": 200.83, "o_in_calls": 61.0, "o_in_gt10": 46.0, "o_in_talk": 143.85, "m_out_calls": 9.0, "m_out_gt10": 7.0, "m_out_talk": 11.98, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 9.0, "o_out_gt10": 6.0, "o_out_talk": 20.53, "o_in_calls": 31.0, "o_in_gt10": 15.0, "o_in_talk": 31.95, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 0.4, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 137.0, "o_out_gt10": 61.0, "o_out_talk": 89.9, "o_in_calls": 34.0, "o_in_gt10": 28.0, "o_in_talk": 61.1, "m_out_calls": 8.0, "m_out_gt10": 5.0, "m_out_talk": 9.65, "m_in_calls": 2.0, "m_in_gt10": 2.0, "m_in_talk": 6.92}, {"o_out_calls": 173.0, "o_out_gt10": 83.0, "o_out_talk": 165.08, "o_in_calls": 49.0, "o_in_gt10": 43.0, "o_in_talk": 116.65, "m_out_calls": 21.0, "m_out_gt10": 17.0, "m_out_talk": 30.53, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 131.0, "o_out_gt10": 58.0, "o_out_talk": 111.78, "o_in_calls": 36.0, "o_in_gt10": 32.0, "o_in_talk": 93.33, "m_out_calls": 21.0, "m_out_gt10": 18.0, "m_out_talk": 33.3, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 48.0, "o_out_gt10": 25.0, "o_out_talk": 78.67, "o_in_calls": 26.0, "o_in_gt10": 24.0, "o_in_talk": 56.02, "m_out_calls": 8.0, "m_out_gt10": 5.0, "m_out_talk": 10.5, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 1.0, "o_out_gt10": 1.0, "o_out_talk": 0.22, "o_in_calls": 9.0, "o_in_gt10": 0.0, "o_in_talk": 0.0, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}]}}, {"name": "Банько", "office": true, "mts": true, "phone": "+7 918 623-86-72", "days": [{"o_out_calls": 16.0, "o_out_gt10": 11.0, "o_out_talk": 32.88, "o_in_calls": 10.0, "o_in_gt10": 5.0, "o_in_talk": 6.45, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 5, "vac": false}, {"o_out_calls": 13.0, "o_out_gt10": 11.0, "o_out_talk": 29.77, "o_in_calls": 16.0, "o_in_gt10": 11.0, "o_in_talk": 24.93, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 5, "vac": false}, {"o_out_calls": 31.0, "o_out_gt10": 22.0, "o_out_talk": 35.03, "o_in_calls": 16.0, "o_in_gt10": 6.0, "o_in_talk": 19.03, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 9, "vac": false}, {"o_out_calls": 17.0, "o_out_gt10": 10.0, "o_out_talk": 20.28, "o_in_calls": 9.0, "o_in_gt10": 4.0, "o_in_talk": 5.7, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 5, "vac": false}, {"o_out_calls": 12.0, "o_out_gt10": 9.0, "o_out_talk": 25.62, "o_in_calls": 8.0, "o_in_gt10": 5.0, "o_in_talk": 25.27, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 10.0, "o_out_gt10": 4.0, "o_out_talk": 7.02, "o_in_calls": 20.0, "o_in_gt10": 17.0, "o_in_talk": 42.95, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 21.0, "o_out_gt10": 12.0, "o_out_talk": 22.32, "o_in_calls": 13.0, "o_in_gt10": 8.0, "o_in_talk": 20.87, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 5, "vac": false}, {"o_out_calls": 11.0, "o_out_gt10": 8.0, "o_out_talk": 19.85, "o_in_calls": 4.0, "o_in_gt10": 3.0, "o_in_talk": 3.5, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": false}, {"o_out_calls": 24.0, "o_out_gt10": 14.0, "o_out_talk": 30.18, "o_in_calls": 5.0, "o_in_gt10": 3.0, "o_in_talk": 7.72, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 2, "vac": false}, {"o_out_calls": 2.0, "o_out_gt10": 1.0, "o_out_talk": 0.77, "o_in_calls": 6.0, "o_in_gt10": 6.0, "o_in_talk": 28.57, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 11.0, "o_out_gt10": 7.0, "o_out_talk": 14.37, "o_in_calls": 10.0, "o_in_gt10": 7.0, "o_in_talk": 32.77, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 10.0, "o_out_gt10": 7.0, "o_out_talk": 13.37, "o_in_calls": 10.0, "o_in_gt10": 7.0, "o_in_talk": 11.42, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": false}, {"o_out_calls": 16.0, "o_out_gt10": 8.0, "o_out_talk": 23.32, "o_in_calls": 13.0, "o_in_gt10": 12.0, "o_in_talk": 27.28, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": false}, {"o_out_calls": 20.0, "o_out_gt10": 10.0, "o_out_talk": 16.0, "o_in_calls": 7.0, "o_in_gt10": 3.0, "o_in_talk": 12.75, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 4, "vac": false}, {"o_out_calls": 16.0, "o_out_gt10": 7.0, "o_out_talk": 12.7, "o_in_calls": 12.0, "o_in_gt10": 7.0, "o_in_talk": 15.77, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 31.0, "o_out_gt10": 16.0, "o_out_talk": 33.93, "o_in_calls": 6.0, "o_in_gt10": 6.0, "o_in_talk": 13.58, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 11.0, "o_out_gt10": 6.0, "o_out_talk": 14.65, "o_in_calls": 4.0, "o_in_gt10": 3.0, "o_in_talk": 8.18, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": false}, {"o_out_calls": 28.0, "o_out_gt10": 10.0, "o_out_talk": 35.18, "o_in_calls": 10.0, "o_in_gt10": 6.0, "o_in_talk": 11.45, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 4, "vac": false}, {"o_out_calls": 25.0, "o_out_gt10": 13.0, "o_out_talk": 14.8, "o_in_calls": 2.0, "o_in_gt10": 1.0, "o_in_talk": 0.77, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 0.98, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": false}, {"o_out_calls": 11.0, "o_out_gt10": 7.0, "o_out_talk": 29.52, "o_in_calls": 17.0, "o_in_gt10": 13.0, "o_in_talk": 52.43, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 4, "vac": false}, {"o_out_calls": 43.0, "o_out_gt10": 18.0, "o_out_talk": 24.02, "o_in_calls": 11.0, "o_in_gt10": 6.0, "o_in_talk": 16.7, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 15.0, "o_out_gt10": 7.0, "o_out_talk": 9.55, "o_in_calls": 9.0, "o_in_gt10": 5.0, "o_in_talk": 7.32, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 7.68, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": false}, {"o_out_calls": 35.0, "o_out_gt10": 15.0, "o_out_talk": 27.25, "o_in_calls": 7.0, "o_in_gt10": 6.0, "o_in_talk": 21.92, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 1, "vac": false}, {"o_out_calls": 11.0, "o_out_gt10": 1.0, "o_out_talk": 0.95, "o_in_calls": 4.0, "o_in_gt10": 4.0, "o_in_talk": 13.35, "m_out_calls": 3.0, "m_out_gt10": 2.0, "m_out_talk": 2.15, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 12.0, "o_out_gt10": 6.0, "o_out_talk": 28.65, "o_in_calls": 5.0, "o_in_gt10": 5.0, "o_in_talk": 28.75, "m_out_calls": 1.0, "m_out_gt10": 0.0, "m_out_talk": 0.12, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 28.0, "o_out_gt10": 12.0, "o_out_talk": 20.3, "o_in_calls": 7.0, "o_in_gt10": 4.0, "o_in_talk": 12.92, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 3, "vac": false}, {"o_out_calls": 41.0, "o_out_gt10": 20.0, "o_out_talk": 46.15, "o_in_calls": 11.0, "o_in_gt10": 6.0, "o_in_talk": 18.58, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 5, "vac": false}], "monthly": [{"n": 15, "o_out_calls": 113.0, "o_out_gt10": 69.0, "o_out_talk": 213.38, "o_in_calls": 115.0, "o_in_gt10": 82.0, "o_in_talk": 227.53, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 19, "o_out_calls": 260.0, "o_out_gt10": 138.0, "o_out_talk": 285.97, "o_in_calls": 109.0, "o_in_gt10": 83.0, "o_in_talk": 256.77, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 21, "o_out_calls": 344.0, "o_out_gt10": 179.0, "o_out_talk": 354.18, "o_in_calls": 172.0, "o_in_gt10": 124.0, "o_in_talk": 403.72, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 16, "o_out_calls": 298.0, "o_out_gt10": 150.0, "o_out_talk": 322.27, "o_in_calls": 141.0, "o_in_gt10": 94.0, "o_in_talk": 245.85, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 19, "o_out_calls": 440.0, "o_out_gt10": 229.0, "o_out_talk": 447.42, "o_in_calls": 152.0, "o_in_gt10": 108.0, "o_in_talk": 333.48, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 21, "o_out_calls": 304.0, "o_out_gt10": 162.0, "o_out_talk": 339.0, "o_in_calls": 226.0, "o_in_gt10": 166.0, "o_in_talk": 574.35, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 23, "o_out_calls": 389.0, "o_out_gt10": 187.0, "o_out_talk": 430.67, "o_in_calls": 188.0, "o_in_gt10": 135.0, "o_in_talk": 379.08, "m_out_calls": 15.0, "m_out_gt10": 12.0, "m_out_talk": 16.72, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 0.88}, {"n": 13, "o_out_calls": 217.0, "o_out_gt10": 120.0, "o_out_talk": 221.55, "o_in_calls": 107.0, "o_in_gt10": 62.0, "o_in_talk": 179.33, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 22, "o_out_calls": 413.0, "o_out_gt10": 222.0, "o_out_talk": 459.48, "o_in_calls": 215.0, "o_in_gt10": 145.0, "o_in_talk": 410.87, "m_out_calls": 2.0, "m_out_gt10": 2.0, "m_out_talk": 8.67, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 4, "o_out_calls": 92.0, "o_out_gt10": 39.0, "o_out_talk": 96.05, "o_in_calls": 27.0, "o_in_gt10": 19.0, "o_in_talk": 73.6, "m_out_calls": 4.0, "m_out_gt10": 2.0, "m_out_talk": 2.27, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}], "hourly": {"n": 39, "rows": [{"o_out_calls": 17.0, "o_out_gt10": 13.0, "o_out_talk": 46.83, "o_in_calls": 10.0, "o_in_gt10": 8.0, "o_in_talk": 16.03, "m_out_calls": 1.0, "m_out_gt10": 0.0, "m_out_talk": 0.02, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 54.0, "o_out_gt10": 25.0, "o_out_talk": 53.03, "o_in_calls": 31.0, "o_in_gt10": 27.0, "o_in_talk": 70.25, "m_out_calls": 2.0, "m_out_gt10": 2.0, "m_out_talk": 8.68, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 107.0, "o_out_gt10": 58.0, "o_out_talk": 148.4, "o_in_calls": 60.0, "o_in_gt10": 40.0, "o_in_talk": 95.9, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 1.13, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 141.0, "o_out_gt10": 77.0, "o_out_talk": 140.9, "o_in_calls": 55.0, "o_in_gt10": 32.0, "o_in_talk": 112.97, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 0.98, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 14.0, "o_out_gt10": 12.0, "o_out_talk": 32.92, "o_in_calls": 40.0, "o_in_gt10": 17.0, "o_in_talk": 81.57, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 133.0, "o_out_gt10": 72.0, "o_out_talk": 108.92, "o_in_calls": 34.0, "o_in_gt10": 22.0, "o_in_talk": 52.63, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 139.0, "o_out_gt10": 67.0, "o_out_talk": 139.98, "o_in_calls": 42.0, "o_in_gt10": 31.0, "o_in_talk": 68.47, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 85.0, "o_out_gt10": 42.0, "o_out_talk": 87.55, "o_in_calls": 44.0, "o_in_gt10": 28.0, "o_in_talk": 96.12, "m_out_calls": 1.0, "m_out_gt10": 0.0, "m_out_talk": 0.12, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 32.0, "o_out_gt10": 15.0, "o_out_talk": 18.55, "o_in_calls": 24.0, "o_in_gt10": 21.0, "o_in_talk": 69.87, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 7.0, "o_in_gt10": 0.0, "o_in_talk": 0.0, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}]}}, {"name": "Куликова", "office": false, "mts": true, "phone": "+7 988 670-04-03", "days": [{"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 17.0, "m_out_gt10": 13.0, "m_out_talk": 17.7, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 11.0, "m_out_gt10": 8.0, "m_out_talk": 7.32, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 2.4, "o_missed": 0, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 18.0, "m_out_gt10": 7.0, "m_out_talk": 26.6, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 0.88, "o_missed": 0, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 12.92, "o_missed": 0, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 8.0, "m_out_gt10": 3.0, "m_out_talk": 1.62, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 1.32, "o_missed": 0, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 3.0, "m_out_gt10": 3.0, "m_out_talk": 2.53, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 5.0, "m_out_gt10": 4.0, "m_out_talk": 3.83, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 5.0, "m_out_gt10": 4.0, "m_out_talk": 15.58, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 2.0, "m_out_gt10": 2.0, "m_out_talk": 5.02, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 5.0, "m_out_gt10": 5.0, "m_out_talk": 4.78, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 3.0, "m_out_gt10": 2.0, "m_out_talk": 4.5, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 14.0, "m_out_gt10": 8.0, "m_out_talk": 7.92, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 0.33, "o_missed": 0, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 5.0, "m_out_gt10": 3.0, "m_out_talk": 2.02, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 2.67, "o_missed": 0, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 4.0, "m_out_gt10": 3.0, "m_out_talk": 1.77, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 12.0, "m_out_gt10": 6.0, "m_out_talk": 11.3, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 6.0, "m_out_gt10": 5.0, "m_out_talk": 3.5, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 4.0, "m_out_gt10": 4.0, "m_out_talk": 1.97, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 8.0, "m_out_gt10": 6.0, "m_out_talk": 3.92, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 1.0, "m_out_gt10": 1.0, "m_out_talk": 1.55, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 3.0, "m_out_gt10": 2.0, "m_out_talk": 1.57, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 2.0, "m_out_gt10": 1.0, "m_out_talk": 3.8, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 3.32, "o_missed": 0, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 3.0, "m_out_gt10": 3.0, "m_out_talk": 3.77, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 0.75, "o_missed": 0, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 7.0, "m_out_gt10": 4.0, "m_out_talk": 3.08, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 5.0, "m_out_gt10": 3.0, "m_out_talk": 1.88, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 8.0, "m_out_gt10": 3.0, "m_out_talk": 4.43, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0, "o_missed": 0, "vac": false}], "monthly": [{"n": 0, "o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 0, "o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 0, "o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 0, "o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 0, "o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 0, "o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"n": 11, "o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 111.0, "m_out_gt10": 86.0, "m_out_talk": 100.13, "m_in_calls": 17.0, "m_in_gt10": 16.0, "m_in_talk": 36.25}, {"n": 21, "o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 301.0, "m_out_gt10": 215.0, "m_out_talk": 333.05, "m_in_calls": 22.0, "m_in_gt10": 21.0, "m_in_talk": 44.7}, {"n": 21, "o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 122.0, "m_out_gt10": 80.0, "m_out_talk": 114.85, "m_in_calls": 8.0, "m_in_gt10": 8.0, "m_in_talk": 24.58}, {"n": 3, "o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 20.0, "m_out_gt10": 10.0, "m_out_talk": 9.4, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}], "hourly": {"n": 45, "rows": [{"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 0, "m_out_gt10": 0, "m_out_talk": 0, "m_in_calls": 0, "m_in_gt10": 0, "m_in_talk": 0}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 20.0, "m_out_gt10": 12.0, "m_out_talk": 18.23, "m_in_calls": 2.0, "m_in_gt10": 2.0, "m_in_talk": 3.08}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 75.0, "m_out_gt10": 56.0, "m_out_talk": 83.15, "m_in_calls": 5.0, "m_in_gt10": 5.0, "m_in_talk": 10.07}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 66.0, "m_out_gt10": 43.0, "m_out_talk": 70.23, "m_in_calls": 5.0, "m_in_gt10": 5.0, "m_in_talk": 20.28}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 3.0, "m_out_gt10": 3.0, "m_out_talk": 20.35, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 1.48}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 45.0, "m_out_gt10": 33.0, "m_out_talk": 36.9, "m_in_calls": 4.0, "m_in_gt10": 4.0, "m_in_talk": 12.42}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 84.0, "m_out_gt10": 57.0, "m_out_talk": 87.03, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 0.35}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 88.0, "m_out_gt10": 61.0, "m_out_talk": 83.1, "m_in_calls": 8.0, "m_in_gt10": 7.0, "m_in_talk": 11.72}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 51.0, "m_out_gt10": 32.0, "m_out_talk": 50.4, "m_in_calls": 1.0, "m_in_gt10": 1.0, "m_in_talk": 1.58}, {"o_out_calls": 0, "o_out_gt10": 0, "o_out_talk": 0, "o_in_calls": 0, "o_in_gt10": 0, "o_in_talk": 0, "m_out_calls": 11.0, "m_out_gt10": 8.0, "m_out_talk": 7.9, "m_in_calls": 2.0, "m_in_gt10": 2.0, "m_in_talk": 7.42}]}}], "weekend": {"office": 20, "mts": 0}, "hours": {"labels": [8, 9, 10, 11, 12, 13, 14, 15, 16, 17], "from": "2026-08-03", "to": "2026-10-06", "outside": 24, "last": 18}};
+
+const METRICS = [
+  { id: "calls", label: "Звонки", digits: 0 },
+  { id: "gt10", label: "Звонки > 10 сек", digits: 0 },
+  { id: "talk", label: "Разговор, мин", digits: 1 },
+];
+const LINES = [
+  { id: "out", label: "Исходящие", width: 2.75 },
+  { id: "in", label: "Входящие", width: 1.75 },
+  { id: "all", label: "Вместе", width: 1.75 },
+];
+const WD = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
+const state = { metric: "calls", scale: "shared", monLine: "out" };
+const dates = DATA.dates.map(s => new Date(s + "T00:00:00"));
+const partial = DATA.dates.map(s => DATA.partial[s] || null);
+const noMts = DATA.dates.map(s => DATA.no_mts.includes(s));
+const dm = d => String(d.getDate()).padStart(2, "0") + "." + String(d.getMonth() + 1).padStart(2, "0");
+const fmt = (v, digits = 1) => v.toLocaleString("ru-RU", { maximumFractionDigits: digits, minimumFractionDigits: 0 });
+const metric = () => METRICS.find(x => x.id === state.metric);
+
+// value of one day: src "o" | "m" | "both", dir "out" | "in" | "all"
+function val(d, k, src = "both", dir = "all") {
+  const srcs = src === "both" ? ["o", "m"] : [src];
+  const dirs = dir === "all" ? ["out", "in"] : [dir];
+  let s = 0;
+  for (const a of srcs) for (const b of dirs) s += d[`${a}_${b}_${k}`];
+  return s;
+}
+
+const el = (tag, attrs = {}, text) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  if (text != null) n.textContent = text;
+  return n;
+};
+const SVG = "http://www.w3.org/2000/svg";
+const sv = (tag, attrs = {}, text) => {
+  const n = document.createElementNS(SVG, tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  if (text != null) n.textContent = text;
+  return n;
+};
+
+const counted = (d, i) => !d.vac && !partial[i] && val(d, "calls") > 0;
+
+function averages(mgr, k) {
+  const days = mgr.days.filter(counted);
+  const n = days.length || 1;
+  const avg = (src, dir) => days.reduce((s, d) => s + val(d, k, src, dir), 0) / n;
+  return { n: days.length, all: avg("both", "all"), out: avg("both", "out"), in: avg("both", "in"),
+           o: avg("o", "out"), m: avg("m", "out") };
+}
+
+DATA.managers.forEach((m, i) => { m._id = "card-" + (i + 1); });
+const order = DATA.managers.slice().sort((a, b) => averages(b, "calls").out - averages(a, "calls").out);
+
+function sourceLine(mgr) {
+  if (mgr.office && mgr.mts) return "Офис и мобильный МТС " + mgr.phone;
+  if (mgr.office) return "Только офис: мобильного номера МТС в выгрузке нет";
+  return "Только мобильный МТС " + mgr.phone + ": офисной линии нет";
+}
+
+function runsOf(flags) {
+  const out = [];
+  let s = -1;
+  flags.forEach((f, i) => {
+    if (f && s < 0) s = i;
+    if ((!f || i === flags.length - 1) && s >= 0) { out.push([s, f ? i : i - 1]); s = -1; }
+  });
+  return out;
+}
+
+// ── header, controls, notes ──────────────────────────────
+function initStatic() {
+  const first = dates[0], last = dates[dates.length - 1];
+  document.getElementById("lede").textContent =
+    `Период 29.08–${dm(last)}.2026: ${dates.length} рабочих дней с ${dm(first)}. ` +
+    "Офисная телефония МегаФон и мобильные номера МТС сведены вместе. Основной показатель — исходящие; на графиках рядом входящие и все звонки вместе.";
+  const pd = DATA.dates.map((s, i) => partial[i] ? `${dm(dates[i])} — неполный день (${partial[i]})` : null).filter(Boolean);
+  const nm = dates.filter((d, i) => noMts[i]).map(dm);
+  const notes = [];
+  if (pd.length) notes.push(pd.join("; ") + ": на графиках пунктиром, в средние не входит.");
+  if (nm.length) notes.push(`${nm.join(", ")} — детализации МТС пока нет, в этот день учтён только офис.`);
+  document.getElementById("partial-note").textContent = notes.join(" ");
+
+  const seg = document.getElementById("metric");
+  for (const mt of METRICS) {
+    const inp = el("input", { type: "radio", name: "metric", id: "m-" + mt.id, value: mt.id });
+    if (mt.id === state.metric) inp.checked = true;
+    seg.append(inp, el("label", { for: "m-" + mt.id }, mt.label));
+  }
+  seg.addEventListener("change", e => { state.metric = e.target.value; renderAll(); });
+  document.getElementById("scale").addEventListener("change", e => { state.scale = e.target.value; renderCharts(); });
+  document.getElementById("mon-line").addEventListener("change", e => { state.monLine = e.target.value; renderMonthly(); });
+  const oct = dates.filter((d, i) => d.getMonth() === 9 && !partial[i]);
+  document.getElementById("mon-note").textContent =
+    "Офис и МТС вместе. Среднее за рабочий день, когда был хотя бы один звонок; исключённые дни не входят. " +
+    (oct.length ? `Октябрь — ${dm(oct[0])}–${dm(oct[oct.length - 1])}, ${oct.length} ${oct.length % 10 === 1 && oct.length % 100 !== 11 ? "рабочий день" : [2, 3, 4].includes(oct.length % 10) && ![12, 13, 14].includes(oct.length % 100) ? "рабочих дня" : "рабочих дней"}. ` : "") +
+    "Мобильные МТС подключены 10–13.07, до июля в таблице только офис.";
+
+  const vac = [];
+  for (const mgr of DATA.managers)
+    for (const [a, b] of runsOf(mgr.days.map(d => d.vac))) vac.push(`${mgr.name} ${dm(dates[a])}–${dm(dates[b])}`);
+  const rules = [
+    "Офис — выгрузки «История внешних звонков» (МегаФон): 31.08 из выгрузки за июнь–август, 01–28.09 из выгрузок от 29.09 (Пугачева — из своей отдельной выгрузки), 29.09–05.10 из выгрузки от 06.10, 06.10 из выгрузки от 07.10. Общая линия «Отдел продаж ОТ Краснодар» не учтена.",
+    "МТС — детализация по мобильным номерам: до 28.09 из выгрузок от 02.10, с 29.09 по 05.10 из детализации по лицевому счёту; за 06.10 детализации МТС пока нет. За 29–30.09 данные есть в обоих источниках, звонки совпали один в один.",
+    "Только рабочие дни. 29–30.08 и 3–4.10 — выходные, звонки в выходные не показаны (в офисе их было " + DATA.weekend.office + ").",
+    "Исходящие: в офисе — с недозвонами. Входящие: в офисе — принятые и пропущенные. В МТС есть только состоявшиеся разговоры, недозвонов и пропущенных в детализации нет. Для сравнения офиса и мобильного точнее «Звонки > 10 сек».",
+    "Основной показатель — исходящие: в сводке, на карточках и в сортировке. Вместе = исходящие + входящие, с офиса и с мобильного. «Разговор» — сумма фактической длительности, без округления до минут.",
+    "Среднее в день = сумма за период / рабочие дни, когда у менеджера был хотя бы один звонок с офиса или с мобильного. В отчёте по МТС от 02.10 делили только на дни со звонками с мобильного, поэтому там средние по МТС выше.",
+    "Исключённые дни взяты из прошлого отчёта (отпуска и дни резкого падения активности): " + (vac.join(", ") || "в этом периоде нет") + ". На графиках они показаны серой полосой, в средние не входят.",
+    "Средние по месяцам: сумма за месяц / рабочие дни месяца, когда был хотя бы один звонок. Не входят исключённые дни из прошлого отчёта (отпуска, дни падения активности, 21.04 — сбой связи у всех). Офис за январь–сентябрь — из тех же выгрузок, что и отчёт за январь–сентябрь, цифры офиса совпадают с ним. «—» — данных нет: у Куликовой нет офисной линии, а мобильный МТС подключён только в июле.",
+    `По часам: с 01.08 по ${dm(dates[dates.length - 1])}. Звонок относится к часу, в котором начался. Звонки после ${DATA.hours.last}:00 в таблицу не входят: их единицы (${DATA.hours.outside} за период на всех менеджеров). Среднее = сумма за период / рабочие дни, когда был хотя бы один звонок; исключённые дни не входят. Ячейки исходящих подкрашены: чем темнее, тем больше звонков в этот час у менеджера.`,
+    "Звонки, помеченные МТС как спам, не учтены.",
+  ];
+  const ul = document.getElementById("rules");
+  for (const r of rules) ul.append(el("li", {}, r));
+}
+
+// ── summary table ────────────────────────────────────────
+function renderSummary() {
+  const mt = metric();
+  document.getElementById("sum-title").textContent = mt.label + " — среднее в день";
+  const rows = DATA.managers.map(mgr => ({ mgr, a: averages(mgr, mt.id) })).sort((x, y) => y.a.out - x.a.out);
+  const max = Math.max(...rows.map(r => r.a.all), 1e-9);
+  const t = document.getElementById("summary");
+  t.replaceChildren();
+  const head = el("tr");
+  head.append(el("th", {}, "Менеджер"), el("th", {}, "Дней"));
+  for (const [cls, h] of [["out", "Исходящие"], ["in", "Входящие"], ["all", "Вместе"]]) {
+    const th = el("th");
+    th.append(el("i", { class: "lk " + cls }), document.createTextNode(h));
+    head.append(th);
+  }
+  head.append(el("th", {}, "исх. с офиса"), el("th", {}, "исх. с МТС"), el("th"));
+  const thead = el("thead");
+  thead.append(head);
+  t.append(thead);
+  const tb = el("tbody");
+  for (const { mgr, a } of rows) {
+    const tr = el("tr");
+    const c0 = el("td");
+    const link = el("a", { href: "#" + mgr._id, class: "mgr-link" }, mgr.name);
+    link.addEventListener("click", e => { e.preventDefault(); document.getElementById(mgr._id).scrollIntoView({ behavior: "smooth", block: "start" }); });
+    c0.append(link);
+    tr.append(c0, el("td", {}, String(a.n)), el("td", { class: "total" }, fmt(a.out)), el("td", {}, fmt(a.in)),
+      el("td", {}, fmt(a.all)),
+      el("td", { class: "src-col" }, mgr.office ? fmt(a.o) : "—"),
+      el("td", { class: "src-col" }, mgr.mts ? fmt(a.m) : "—"));
+    const bc = el("td", { class: "barcell" });
+    const bar = el("div", { class: "hbar", role: "img", "aria-label": `исходящие ${fmt(a.out)}, входящие ${fmt(a.in)}` });
+    if (a.out > 0) bar.append(el("i", { class: "out", style: `width:${a.out / max * 100}%` }));
+    if (a.in > 0) bar.append(el("i", { class: "in", style: `width:${a.in / max * 100}%` }));
+    bc.append(bar);
+    tr.append(bc);
+    tb.append(tr);
+  }
+  const avg = k => rows.reduce((s, r) => s + r.a[k], 0) / rows.length;
+  const tr = el("tr", { class: "avg" });
+  tr.append(el("td", {}, "Среднее на менеджера"), el("td"), el("td", { class: "total" }, fmt(avg("out"))), el("td", {}, fmt(avg("in"))),
+    el("td", {}, fmt(avg("all"))), el("td", { class: "src-col" }, fmt(avg("o"))),
+    el("td", { class: "src-col" }, fmt(avg("m"))), el("td"));
+  tb.append(tr);
+  t.append(tb);
+}
+
+// ── cards with daily line charts ─────────────────────────
+function buildCards() {
+  const box = document.getElementById("cards");
+  for (const mgr of order) {
+    const card = el("article", { class: "card", id: mgr._id });
+    const head = el("div", { class: "card-head" });
+    const left = el("div");
+    left.append(el("h3", {}, mgr.name), el("div", { class: "src" }, sourceLine(mgr)));
+    const kpi = el("div", { class: "kpi" });
+    kpi.append(el("b"), el("span", {}, "исходящих в среднем в день"));
+    head.append(left, kpi);
+    const split = el("div", { class: "split" });
+    const chart = el("div", { class: "chart" });
+    const hours = el("div", { class: "hours" });
+    card.append(head, split, chart, hours);
+    box.append(card);
+    mgr._card = { kpi, split, chart, hours };
+  }
+}
+
+function renderCards() {
+  const mt = metric();
+  for (const mgr of order) {
+    const a = averages(mgr, mt.id);
+    const { kpi, split } = mgr._card;
+    kpi.querySelector("b").textContent = fmt(a.out);
+    split.replaceChildren();
+    for (const [cls, lbl, v] of [["in", "входящие", a.in], ["all", "вместе", a.all]]) {
+      const s = el("span");
+      s.append(el("i", { class: "lk " + cls }), document.createTextNode(`${lbl} ${fmt(v)}`));
+      split.append(s);
+    }
+    if (mgr.office && mgr.mts) split.append(el("span", {}, `исходящие: офис ${fmt(a.o)} · МТС ${fmt(a.m)}`));
+    split.append(el("span", {}, a.n + " дн. в расчёте"));
+    renderHours(mgr, mt);
+  }
+  renderCharts();
+}
+
+const HOUR_TITLE = { calls: "Звонки по часам", gt10: "Звонки > 10 сек по часам", talk: "Разговор по часам, мин" };
+function renderHours(mgr, mt) {
+  const box = mgr._card.hours;
+  const H = mgr.hourly, n = H.n || 1;
+  const from = new Date(DATA.hours.from + "T00:00:00"), to = new Date(DATA.hours.to + "T00:00:00");
+  const title = el("div", { class: "hours-title" });
+  title.append(el("b", {}, HOUR_TITLE[mt.id]),
+    document.createTextNode(` · в среднем за рабочий день, ${dm(from)}–${dm(to)}, ${H.n} дн. в расчёте. «9:00» — звонки с 9:00 до 9:59`));
+  const t = el("table", { class: "htbl" });
+  const cg = el("colgroup");
+  cg.append(el("col", { class: "lbl" }));
+  for (const _ of DATA.hours.labels) cg.append(el("col"));
+  t.append(cg);
+  const both = (full, short) => {
+    const f = document.createDocumentFragment();
+    f.append(el("span", { class: "hf" }, full), el("span", { class: "hs" }, short));
+    return f;
+  };
+  const hr = el("tr");
+  hr.append(el("th", {}, "Час"));
+  for (const h of DATA.hours.labels) {
+    const th = el("th", { scope: "col", title: `с ${h}:00 до ${h}:59` });
+    th.append(both(h + ":00", String(h)));
+    hr.append(th);
+  }
+  const thead = el("thead");
+  thead.append(hr);
+  t.append(thead);
+  const tb = el("tbody");
+  const outMax = Math.max(...H.rows.map(r => val(r, mt.id, "both", "out")), 1e-9);
+  for (const L of LINES) {
+    const tr = el("tr", L.id === "out" ? { class: "main" } : {});
+    const c0 = el("td");
+    c0.append(both(L.label, { out: "Исх.", in: "Вход.", all: "Всего" }[L.id]));
+    tr.append(c0);
+    for (const r of H.rows) {
+      const v = val(r, mt.id, "both", L.id) / n;
+      const attrs = {};
+      if (v < 0.05) attrs.class = "z";
+      if (L.id === "out" && v >= 0.05)
+        attrs.style = `background: color-mix(in srgb, var(--c-out) ${Math.round(6 + 30 * v * n / outMax)}%, var(--surface))`;
+      tr.append(el("td", attrs, v < 0.05 ? "·" : fmt(v)));
+    }
+    tb.append(tr);
+  }
+  t.append(tb);
+  const wrap = el("div", { class: "tbl-wrap" });
+  wrap.append(t);
+  box.replaceChildren(title, wrap);
+}
+
+function niceStep(max, target = 4) {
+  const raw = max / target;
+  const p = Math.pow(10, Math.floor(Math.log10(raw)));
+  for (const k of [1, 2, 2.5, 5, 10]) if (raw <= k * p) return k * p;
+  return 10 * p;
+}
+
+function renderCharts() {
+  const k = metric().id;
+  const shared = Math.max(...DATA.managers.flatMap(m => m.days.map(d => val(d, k))), 1);
+  for (const mgr of order) {
+    const own = Math.max(...mgr.days.map(d => val(d, k)), 1);
+    drawChart(mgr, state.scale === "shared" ? shared : own);
+  }
+}
+
+function drawChart(mgr, yMaxRaw) {
+  const mt = metric();
+  const box = mgr._card.chart;
+  const W = Math.max(box.clientWidth, 280);
+  const H = 210;
+  const pad = { l: 34, r: 10, t: 18, b: 24 };
+  const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
+  const step = niceStep(yMaxRaw);
+  const yMax = Math.ceil(yMaxRaw / step) * step;
+  const n = dates.length, slot = pw / n;
+  const x = i => pad.l + (i + .5) * slot;
+  const y = v => pad.t + ph - v / yMax * ph;
+  const lastFull = partial[n - 1] ? n - 2 : n - 1;
+  const a = averages(mgr, mt.id);
+
+  const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "img",
+    "aria-label": `${mgr.name}: ${mt.label.toLowerCase()} по дням. В среднем в день исходящих ${fmt(a.out)}, входящих ${fmt(a.in)}, вместе ${fmt(a.all)}` });
+
+  for (const [s, e] of runsOf(mgr.days.map(d => d.vac))) {
+    svg.append(sv("rect", { x: pad.l + s * slot, y: pad.t - 14, width: (e - s + 1) * slot, height: ph + 14, fill: "var(--band)" }));
+    svg.append(sv("text", { x: pad.l + (s + e + 1) / 2 * slot, y: pad.t - 4, "text-anchor": "middle", "font-size": 10.5, fill: "var(--muted)" },
+      e - s >= 2 ? "исключены" : "искл."));
+  }
+
+  for (let v = 0; v <= yMax + 1e-9; v += step) {
+    svg.append(sv("line", { x1: pad.l, x2: pad.l + pw, y1: y(v), y2: y(v), stroke: v === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1, "shape-rendering": "crispEdges" }));
+    svg.append(sv("text", { x: pad.l - 6, y: y(v) + 3.5, "text-anchor": "end", "font-size": 11, fill: "var(--muted)" }, fmt(v, 1)));
+  }
+  dates.forEach((d, i) => {
+    if (i === 0 || d.getDay() === 1)
+      svg.append(sv("text", { x: x(i), y: H - 6, "text-anchor": "middle", "font-size": 11, fill: "var(--muted)" }, dm(d)));
+  });
+
+  const series = LINES.map(L => ({ ...L, v: mgr.days.map(d => val(d, mt.id, "both", L.id)) }));
+  const mainPts = series[0].v.slice(0, lastFull + 1).map((v, i) => `${x(i)},${y(v)}`);
+  svg.append(sv("path", { d: `M${x(0)},${y(0)}L${mainPts.join("L")}L${x(lastFull)},${y(0)}Z`, fill: "var(--c-out)", "fill-opacity": .08 }));
+
+  for (const s of series.slice().reverse()) {
+    const pts = s.v.map((v, i) => `${x(i)},${y(v)}`);
+    const common = { fill: "none", stroke: `var(--c-${s.id})`, "stroke-width": s.width, "stroke-linejoin": "round", "stroke-linecap": "round" };
+    svg.append(sv("path", { d: "M" + pts.slice(0, lastFull + 1).join("L"), ...common }));
+    if (lastFull < n - 1)
+      svg.append(sv("path", { d: "M" + pts.slice(lastFull).join("L"), ...common, "stroke-dasharray": "3 4", "stroke-opacity": .7 }));
+  }
+
+  const cross = sv("line", { y1: pad.t, y2: pad.t + ph, stroke: "var(--axis)", "stroke-width": 1, visibility: "hidden" });
+  svg.append(cross);
+  const dots = series.map(s => {
+    const c = sv("circle", { r: 4.5, fill: `var(--c-${s.id})`, stroke: "var(--surface)", "stroke-width": 2, visibility: "hidden" });
+    svg.append(c);
+    return c;
+  });
+
+  const hit = sv("rect", { x: pad.l, y: 0, width: pw, height: H, fill: "transparent" });
+  const move = e => {
+    const r = svg.getBoundingClientRect();
+    const i = Math.min(n - 1, Math.max(0, Math.floor((e.clientX - r.left - pad.l) / slot)));
+    cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i));
+    cross.setAttribute("visibility", "visible");
+    series.forEach((s, j) => {
+      dots[j].setAttribute("cx", x(i)); dots[j].setAttribute("cy", y(s.v[i]));
+      dots[j].setAttribute("visibility", "visible");
+    });
+    showTip(mgr, mt, i, e.clientX, e.clientY);
+  };
+  hit.addEventListener("pointermove", move);
+  hit.addEventListener("pointerdown", move);
+  hit.addEventListener("pointerleave", () => {
+    cross.setAttribute("visibility", "hidden");
+    dots.forEach(c => c.setAttribute("visibility", "hidden"));
+    hideTip();
+  });
+  svg.append(hit);
+  box.replaceChildren(svg);
+}
+
+// ── tooltip ──────────────────────────────────────────────
+const tip = document.getElementById("tip");
+function showTip(mgr, mt, i, cx, cy) {
+  const d = mgr.days[i], dt = dates[i], k = mt.id;
+  tip.replaceChildren(el("div", { class: "tip-title" }, `${WD[dt.getDay()]}, ${dm(dt)}.${dt.getFullYear()} · ${mt.label.toLowerCase()}`));
+  for (const L of LINES) {
+    const r = el("div", { class: L.id === "out" ? "tip-row main" : "tip-row" });
+    r.append(el("i", { class: "lk " + L.id }), el("b", {}, fmt(val(d, k, "both", L.id), mt.digits)), el("span", {}, L.label.toLowerCase()));
+    const parts = [];
+    if (mgr.office) {
+      let p = "офис " + fmt(val(d, k, "o", L.id), mt.digits);
+      if (k === "calls" && L.id === "in" && d.o_missed) p += ` (пропущ. ${d.o_missed})`;
+      parts.push(p);
+    }
+    if (mgr.mts) parts.push("МТС " + fmt(val(d, k, "m", L.id), mt.digits));
+    if (parts.length > 1) r.append(el("small", {}, parts.join(" · ")));
+    tip.append(r);
+  }
+  if (d.vac) tip.append(el("div", { class: "tip-flag" }, "Исключённый день: в среднее не входит"));
+  if (partial[i]) tip.append(el("div", { class: "tip-flag" }, "Неполный день: " + partial[i]));
+  if (noMts[i] && mgr.mts) tip.append(el("div", { class: "tip-flag" }, "МТС за этот день данных пока нет"));
+  if (!val(d, "calls") && !d.vac) tip.append(el("div", { class: "tip-flag" }, "Звонков нет"));
+  tip.hidden = false;
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  let tx = cx + 14, ty = cy - h - 12;
+  if (tx + w > window.innerWidth - 8) tx = cx - w - 14;
+  if (tx < 8) tx = 8;
+  if (ty < 8) ty = cy + 16;
+  tip.style.left = tx + "px";
+  tip.style.top = ty + "px";
+}
+function hideTip() { tip.hidden = true; }
+window.addEventListener("scroll", hideTip, { passive: true });
+
+// ── daily table ──────────────────────────────────────────
+function renderDaily() {
+  const mt = metric();
+  document.getElementById("daily-title").textContent = "Таблица по дням — " + mt.label.toLowerCase();
+  const t = document.getElementById("daily");
+  t.replaceChildren();
+  const hr = el("tr");
+  hr.append(el("th", {}, "Менеджер"), el("th", {}, ""));
+  dates.forEach((d, i) => hr.append(el("th", {}, dm(d) + (partial[i] || noMts[i] ? "*" : ""))));
+  hr.append(el("th", {}, "Ср."));
+  const thead = el("thead");
+  thead.append(hr);
+  t.append(thead);
+  const tb = el("tbody");
+  for (const mgr of order) {
+    const a = averages(mgr, mt.id);
+    LINES.forEach((L, li) => {
+      const cls = [L.id === "out" ? "sum" : "", li === 2 ? "last" : ""].filter(Boolean).join(" ");
+      const tr = el("tr", cls ? { class: cls } : {});
+      tr.append(el("td", {}, li === 0 ? mgr.name : ""), el("td", { class: "lbl" }, L.label.toLowerCase()));
+      mgr.days.forEach(d => {
+        const v = val(d, mt.id, "both", L.id);
+        tr.append(el("td", d.vac ? { class: "off" } : {}, v ? fmt(v, mt.digits) : "·"));
+      });
+      tr.append(el("td", {}, fmt(a[L.id])));
+      tb.append(tr);
+    });
+  }
+  t.append(tb);
+}
+
+// ── monthly table ────────────────────────────────────────
+function renderMonthly() {
+  const mt = metric();
+  const line = LINES.find(L => L.id === state.monLine);
+  document.getElementById("mon-title").textContent = `Средние по месяцам 2026 — ${mt.label.toLowerCase()}, ${line.label.toLowerCase()}`;
+  const t = document.getElementById("monthly");
+  t.replaceChildren();
+  const last = DATA.months.length - 1;
+  const hr = el("tr");
+  hr.append(el("th", {}, "Менеджер"));
+  DATA.months.forEach((m, i) => hr.append(el("th", {}, m + (i === last ? "*" : ""))));
+  const thead = el("thead");
+  thead.append(hr);
+  t.append(thead);
+  const tb = el("tbody");
+  const cols = DATA.months.map(() => []);
+  for (const mgr of order) {
+    const tr = el("tr");
+    tr.append(el("td", { class: "mgr-cell" }, mgr.name));
+    mgr.monthly.forEach((x, i) => {
+      if (!x.n) { tr.append(el("td", { class: "na" }, "—")); return; }
+      const v = val(x, mt.id, "both", state.monLine) / x.n;
+      cols[i].push(v);
+      tr.append(el("td", {}, fmt(v)));
+    });
+    tb.append(tr);
+  }
+  const tr = el("tr", { class: "avg" });
+  tr.append(el("td", {}, "Среднее на менеджера"));
+  for (const c of cols) tr.append(el("td", {}, c.length ? fmt(c.reduce((a, b) => a + b, 0) / c.length) : "—"));
+  tb.append(tr);
+  t.append(tb);
+}
+
+function renderAll() { renderSummary(); renderMonthly(); renderCards(); renderDaily(); }
+
+initStatic();
+buildCards();
+renderAll();
+let raf = 0;
+new ResizeObserver(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(renderCharts); })
+  .observe(document.getElementById("cards"));
+</script>
+</body>
+</html>
